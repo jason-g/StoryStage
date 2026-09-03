@@ -18,7 +18,7 @@ It is an **agent-native stage where a person and their browser agent co-direct a
 
 The initial version intentionally supports a small animation vocabulary:
 
-`enter` · `walk` · `run` · `point` · `talk` · `laugh` · `gasp` · `hide` · `exit` · `ride` · `hold` · `drop` · `shoot`
+`enter` · `walk` · `run` · `point` · `talk` · `laugh` · `gasp` · `hide` · `exit` · `ride` · `hold` · `drop` · `shoot` · `fly` · `fall` · `attack`
 
 StoryStage maps typed or spoken language to those actions. This allows natural, playful direction while keeping animation reliable enough for a live, repeatable experience.
 

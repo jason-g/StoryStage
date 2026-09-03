@@ -29,8 +29,8 @@ declare global {
   interface Navigator { modelContext?: ModelContext }
 }
 
-const zoneSchema = { type: "string", enum: ["offstage_left", "left", "center", "right", "offstage_right", "lamp", "crate", "castle", "hillside", "horse", "dragon_roost"] };
-const actionSchema = { type: "string", enum: ["enter", "walk", "run", "point", "talk", "laugh", "gasp", "hide", "exit", "ride", "hold", "drop", "shoot"] };
+const zoneSchema = { type: "string", enum: ["offstage_left", "left", "center", "right", "offstage_right", "lamp", "crate", "castle", "hillside", "horse", "dragon_roost", "top_right", "ground_right"] };
+const actionSchema = { type: "string", enum: ["enter", "walk", "run", "point", "talk", "laugh", "gasp", "hide", "exit", "ride", "hold", "drop", "shoot", "fly", "fall", "attack"] };
 const expressionSchema = { type: "string", enum: ["neutral", "happy", "surprised", "suspicious", "amused", "worried"] };
 const object = (properties: Record<string, unknown>, required: string[] = []) => ({ type: "object", properties, required, additionalProperties: false });
 

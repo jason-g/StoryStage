@@ -74,7 +74,7 @@ type ObjectMatch = {
 const DEFAULT_ACTOR_ALIASES: Record<string, string[]> = {
   fenn: ["detective fenn", "fenn", "fox detective", "the fox", "fox"],
   nix: ["nix", "the robot", "robot", "bot"],
-  aria: ["sir aria", "aria", "the knight", "knight"],
+  aria: ["sir aria", "aria", "the knight", "knight", "brave knight", "brave night"],
   ember: ["ember", "the dragon", "dragon"],
 };
 
@@ -101,6 +101,8 @@ const ZONE_ALIASES: Array<{ zone: StageZone; aliases: string[] }> = [
   { zone: "hillside", aliases: ["hillside", "hill", "the hill"] },
   { zone: "horse", aliases: ["horse", "at the horse", "to the horse", "steed"] },
   { zone: "dragon_roost", aliases: ["dragon roost", "roost", "dragon hill"] },
+  { zone: "top_right", aliases: ["top right", "upper right", "sky right"] },
+  { zone: "ground_right", aliases: ["ground right", "right ground", "ground"] },
 ];
 
 const ACTION_RULES: Array<{ action: StageAction; patterns: RegExp[] }> = [
@@ -117,6 +119,9 @@ const ACTION_RULES: Array<{ action: StageAction; patterns: RegExp[] }> = [
   { action: "hold", patterns: [/\bhold(?:s|ing)?\b/, /\bgrip(?:s|ped|ping)?\b/, /\bpick(?:s|ed|ing)?\s+up\b/] },
   { action: "drop", patterns: [/\bdrop(?:s|ped|ping)?\b/, /\bdiscard(?:s|ed|ing)?\b/] },
   { action: "shoot", patterns: [/\bshoot(?:s|ing)?\b/, /\bfire(?:s|d|ing)?\b/] },
+  { action: "fly", patterns: [/\bfly(?:s|ing)?\b/, /\bsoar(?:s|ed|ing)?\b/] },
+  { action: "fall", patterns: [/\bfall(?:s|ing|en)?\b/, /\bcrash(?:es|ed|ing)?\b/] },
+  { action: "attack", patterns: [/\battack(?:s|ed|ing)?\b/, /\bstrike(?:s|struck|ing)?\b/, /\bslash(?:es|ed|ing)?\b/] },
 ];
 
 const QUOTE_PATTERN = /["“”']([^"“”']+)["“”']/;
@@ -414,12 +419,21 @@ function extractTarget(clause: string, action: StageAction | null, options: Dire
     return fromPreposition;
   };
 
-  if (action === "point" || action === "talk" || action === "hold" || action === "drop" || action === "shoot") {
+  if (action === "point" || action === "talk" || action === "hold" || action === "drop" || action === "shoot" || action === "attack") {
+    if (action === "shoot" || action === "attack") {
+      const actorTarget = objectCandidates.find((item) => item.kind === "actor" && item.index > 0);
+      if (actorTarget) return { targetId: actorTarget.id };
+    }
     const target = findBest((item) => item.kind === "prop" || item.kind === "actor");
     return target ? { targetId: target.id } : {};
   }
 
-  if (action === "enter" || action === "walk" || action === "run" || action === "hide" || action === "exit" || action === "ride") {
+  if (action === "enter" || action === "walk" || action === "run" || action === "hide" || action === "exit" || action === "ride" || action === "fly" || action === "fall") {
+    const directionalDestination = clause.match(/\b(?:to|toward|towards)\s+(?:the\s+)?(top right|ground right|dragon roost|offstage left|offstage right|castle|hillside|horse|left|center|right)\b/i)?.[1].toLowerCase();
+    if (directionalDestination) {
+      const resolvedZone = ZONE_ALIASES.find((entry) => entry.aliases.includes(directionalDestination))?.zone;
+      if (resolvedZone) return { zone: resolvedZone };
+    }
     const target = findBest((item) => item.kind === "zone" || item.kind === "prop");
     if (!target) {
       return {};
@@ -502,7 +516,7 @@ export function parseDirection(input: string, options: DirectionParseOptions = {
           `Could not find a supported action in clause "${clause}".`,
           clauseIndex,
           clause,
-          "Use one of enter, walk, run, point, talk, laugh, gasp, hide, exit, ride, hold, drop, or shoot.",
+          "Use one of enter, walk, run, point, talk, laugh, gasp, hide, exit, ride, hold, drop, shoot, fly, fall, or attack.",
         ),
       );
       return;
@@ -558,7 +572,7 @@ export function parseDirection(input: string, options: DirectionParseOptions = {
       beat.dialogue = dialogue;
     }
 
-    if (beat.action === "walk" || beat.action === "run" || beat.action === "enter" || beat.action === "hide" || beat.action === "exit" || beat.action === "ride") {
+    if (beat.action === "walk" || beat.action === "run" || beat.action === "enter" || beat.action === "hide" || beat.action === "exit" || beat.action === "ride" || beat.action === "fly" || beat.action === "fall") {
       if (!beat.zone && !beat.targetId) {
         warnings.push(
           buildWarning(

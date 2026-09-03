@@ -12,6 +12,9 @@ export const STAGE_ACTIONS = [
   "hold",
   "drop",
   "shoot",
+  "fly",
+  "fall",
+  "attack",
 ] as const;
 
 export type StageAction = (typeof STAGE_ACTIONS)[number];
@@ -28,6 +31,8 @@ export const STAGE_ZONES = [
   "hillside",
   "horse",
   "dragon_roost",
+  "top_right",
+  "ground_right",
 ] as const;
 
 export type StageZone = (typeof STAGE_ZONES)[number];
@@ -183,6 +188,9 @@ const DEFAULT_ACTION_DURATIONS: Record<StageAction, number> = {
   hold: 550,
   drop: 600,
   shoot: 900,
+  fly: 1200,
+  fall: 1000,
+  attack: 850,
 };
 
 const SIDE_BY_ZONE: Partial<Record<StageZone, "left" | "right">> = {
@@ -352,6 +360,12 @@ function buildBeatOutcome(beat: BeatInput, actor: StageActor, before: StageActor
       return { outcome: targetLabel ? `${after.name} drops the ${targetLabel}` : `${after.name} drops an item`, effects };
     case "shoot":
       return { outcome: targetLabel ? `${after.name} shoots at ${targetLabel}` : `${after.name} shoots an arrow`, effects };
+    case "fly":
+      return { outcome: locationLabel ? `${after.name} flies in toward ${locationLabel}` : `${after.name} flies`, effects };
+    case "fall":
+      return { outcome: locationLabel ? `${after.name} falls to ${locationLabel}` : `${after.name} falls`, effects };
+    case "attack":
+      return { outcome: targetLabel ? `${after.name} attacks ${targetLabel}` : `${after.name} attacks`, effects };
     default:
       return {
         outcome: `${after.name} performs ${beat.action}`,
@@ -405,7 +419,7 @@ export function validateBeat(beat: BeatInput, scene: SceneSnapshot): ValidationR
     }
   }
 
-  const needsPosition = beat.action === "walk" || beat.action === "run" || beat.action === "enter" || beat.action === "hide" || beat.action === "exit" || beat.action === "ride";
+  const needsPosition = beat.action === "walk" || beat.action === "run" || beat.action === "enter" || beat.action === "hide" || beat.action === "exit" || beat.action === "ride" || beat.action === "fly" || beat.action === "fall";
   const resolvedZone = resolveDefaultTargetZone(actor, beat);
 
   if (needsPosition && !resolvedZone) {
@@ -453,6 +467,10 @@ export function validateBeat(beat: BeatInput, scene: SceneSnapshot): ValidationR
 
   if ((beat.action === "hold" || beat.action === "drop" || beat.action === "shoot") && !beat.targetId) {
     issues.push({ code: "missing-item-target", severity: "error", message: `${beat.action} needs a target, such as sword, bow, arrow, or dragon.`, beatId: beat.id, actorId: beat.actorId });
+  }
+
+  if (beat.action === "attack" && !beat.targetId) {
+    issues.push({ code: "missing-attack-target", severity: "error", message: "Attack needs a target actor, such as ember.", beatId: beat.id, actorId: beat.actorId });
   }
 
   return {
@@ -552,6 +570,20 @@ export function simulateBeat(scene: SceneSnapshot, beat: BeatInput): {
       after.visible = true;
       break;
     case "shoot":
+      after.visible = true;
+      after.expression = "suspicious";
+      break;
+    case "fly":
+      after.visible = true;
+      after.zone = normalizedBeat.zone ?? actor.zone;
+      after.expression = "amused";
+      break;
+    case "fall":
+      after.visible = true;
+      after.zone = normalizedBeat.zone ?? actor.zone;
+      after.expression = "worried";
+      break;
+    case "attack":
       after.visible = true;
       after.expression = "suspicious";
       break;

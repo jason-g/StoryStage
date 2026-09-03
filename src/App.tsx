@@ -13,7 +13,7 @@ type SpeechResult = ArrayLike<{ transcript: string }> & { isFinal: boolean };
 type SpeechSession = { lang: string; continuous: boolean; interimResults: boolean; start(): void; stop(): void; onresult: (event: { resultIndex: number; results: ArrayLike<SpeechResult> }) => void; onend: () => void; onerror: () => void };
 type SpeechFactory = new () => SpeechSession;
 const examples = ["Nix enters from the right, walks to the crate, gasps, and hides.", "Fenn points at the clue and says ‘I found it!’", "Fenn laughs, then Nix exits right."];
-const questExamples = ["Sir Aria rides to the castle, holds the sword, then shoots at Ember.", "Aria drops the sword and holds the bow.", "Ember laughs, then runs to the hillside."];
+const questExamples = ["Sir Aria rides the horse from the castle towards the right, while Ember flies in from the top right.", "The brave knight shoots at Ember with an arrow; Ember falls to the ground.", "Out of arrows, the knight drops the bow, moves right, and attacks Ember."];
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export default function App() {
