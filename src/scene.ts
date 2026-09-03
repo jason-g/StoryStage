@@ -60,7 +60,7 @@ export function getSceneSummary(state: SceneState) {
   return {
     scene: state.sceneId,
     actors: state.actors.map(({ id, preset, name, palette, zone, expression, visible }) => ({ id, preset, name, palette, zone, expression, visible })),
-    props: state.props.map(({ id, zone, visible }) => ({ id, zone, visible: visible !== false })),
+    props: state.props.map(({ id, zone, visible, heldBy }) => ({ id, zone, visible: visible !== false, heldBy })),
     queue: state.queue.map(({ id, actorId, action, targetId, zone, dialogue, status }) => ({ id, actor: actorId, action, targetId, zone, dialogue, status })),
     isPlaying: state.isPlaying,
   };

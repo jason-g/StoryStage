@@ -65,6 +65,7 @@ export type StageProp = {
   id: StagePropId | string;
   zone: StageZone;
   visible?: boolean;
+  heldBy?: string;
 };
 
 export type StageBeat = {
@@ -558,9 +559,28 @@ export function simulateBeat(scene: SceneSnapshot, beat: BeatInput): {
       break;
   }
 
+  let nextProps = scene.props.map((prop) => ({ ...prop }));
+  if (["enter", "walk", "run", "ride"].includes(normalizedBeat.action)) {
+    nextProps = nextProps.map((prop) => prop.heldBy === actor.id ? { ...prop, zone: after.zone } : prop);
+  }
+  if (normalizedBeat.action === "hold" && normalizedBeat.targetId) {
+    nextProps = nextProps.map((prop) => prop.id === normalizedBeat.targetId ? { ...prop, heldBy: actor.id, zone: after.zone } : prop);
+  }
+  if (normalizedBeat.action === "drop" && normalizedBeat.targetId) {
+    nextProps = nextProps.map((prop) => prop.id === normalizedBeat.targetId && prop.heldBy === actor.id ? { ...prop, heldBy: undefined, zone: after.zone } : prop);
+  }
+  if (normalizedBeat.action === "ride") {
+    nextProps = nextProps.map((prop) => prop.id === "horse" ? { ...prop, heldBy: actor.id, zone: after.zone } : prop);
+  }
+  if (normalizedBeat.action === "shoot") {
+    const target = findActor(scene, normalizedBeat.targetId ?? "");
+    nextProps = nextProps.map((prop) => prop.id === "arrow" ? { ...prop, heldBy: undefined, zone: target?.zone ?? after.zone } : prop);
+  }
+
   const updatedScene: SceneSnapshot = {
     ...scene,
     actors: scene.actors.map((candidate) => (candidate.id === actor.id ? after : candidate)),
+    props: nextProps,
   };
 
   const { outcome, effects } = buildBeatOutcome(normalizedBeat, actor, before, after, scene);
