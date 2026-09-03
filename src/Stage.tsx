@@ -3,9 +3,11 @@ import type { SceneState, StageActor } from "./playback";
 import knightArt from "./assets/sir-aria.webp";
 import dragonArt from "./assets/ember.webp";
 import castleArt from "./assets/hillside-castle.webp";
+import horseArt from "./assets/bramble.webp";
 import "./stage.css";
 import "./hillside.css";
 import "./quest-assets.css";
+import "./horse.css";
 
 type Props = { scene: SceneState; activeBeat?: SceneState["queue"][number] | null };
 const positions: Record<string, CSSProperties> = {
@@ -29,8 +31,8 @@ export default function Stage({ scene, activeBeat }: Props) {
   return <section className="stage-shell" aria-label={hillside ? "StoryStage hillside quest theater" : "StoryStage neon alley theater"}>
     <header className="marquee"><strong>STORYSTAGE</strong><span>live co-direction theater</span><i /></header>
     <div className={`stage ${hillside ? "hillside-stage" : ""}`} aria-live="polite">
-      {hillside ? <><div className="hill-back" /><div className="hill-front" /><img className="castle-art" src={castleArt} alt="A stone castle on the hillside" />{loose("horse") && <div className="horse">♞</div>}{loose("sword") && <div className="sword">†</div>}{loose("bow") && <div className="bow">⌒</div>}{loose("arrow") && <div className="arrow">➤</div>}<div className="floor" /></> : <><div className="rain" /><div className="moon" /><div className="city left-city" /><div className="city right-city" /><div className="neon">NIGHT<br /><em>OWL</em></div><div className="lamp"><b /><i /></div><div className="clue">✦</div><div className="crate">CLUE</div><div className="floor" /></>}
-      {scene.actors.filter((actor) => actor.visible).map((actor) => <div className="actor-slot" key={actor.id} style={positions[actor.zone] ?? positions.center}>{heldBy(actor.id).includes("horse") && <div className="mounted-horse">♞</div>}<Actor actor={actor} active={actor.id === activeBeat?.actorId} />{heldBy(actor.id).filter((id) => id !== "horse").length > 0 && <div className="carried-items">{heldBy(actor.id).filter((id) => id !== "horse").map((id) => id === "sword" ? "†" : id === "bow" ? "⌒" : id === "arrow" ? "➤" : id)}</div>}{activeBeat?.actorId === actor.id && <div className="bubble">{activeBeat.dialogue || activeBeat.action.toUpperCase()}</div>}</div>)}
+      {hillside ? <><div className="hill-back" /><div className="hill-front" /><img className="castle-art" src={castleArt} alt="A stone castle on the hillside" />{loose("horse") && <img className="horse-art" src={horseArt} alt="Bramble, a saddled chestnut horse" />}{loose("sword") && <div className="sword">†</div>}{loose("bow") && <div className="bow">⌒</div>}{loose("arrow") && <div className="arrow">➤</div>}<div className="floor" /></> : <><div className="rain" /><div className="moon" /><div className="city left-city" /><div className="city right-city" /><div className="neon">NIGHT<br /><em>OWL</em></div><div className="lamp"><b /><i /></div><div className="clue">✦</div><div className="crate">CLUE</div><div className="floor" /></>}
+      {scene.actors.filter((actor) => actor.visible).map((actor) => <div className="actor-slot" key={actor.id} style={positions[actor.zone] ?? positions.center}>{heldBy(actor.id).includes("horse") && <img className="mounted-horse" src={horseArt} alt="" />}<Actor actor={actor} active={actor.id === activeBeat?.actorId} />{heldBy(actor.id).filter((id) => id !== "horse").length > 0 && <div className="carried-items">{heldBy(actor.id).filter((id) => id !== "horse").map((id) => id === "sword" ? "†" : id === "bow" ? "⌒" : id === "arrow" ? "➤" : id)}</div>}{activeBeat?.actorId === actor.id && <div className="bubble">{activeBeat.dialogue || activeBeat.action.toUpperCase()}</div>}</div>)}
       {activeBeat && <div className="caption"><b>{scene.actors.find((a) => a.id === activeBeat.actorId)?.name}</b> · {activeBeat.action}</div>}
     </div>
     <footer className="stage-footer">{hillside ? <><span>♜ castle</span><span>♞ horse</span><span>† sword · bow · arrow</span><span>13 action vocabulary</span></> : <><span>● lamp</span><span>● crate</span><span>✦ clue</span><span>13 action vocabulary</span></>}</footer>
