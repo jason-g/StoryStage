@@ -38,6 +38,23 @@ The user creates a cast, selects scenery, places actors, and directs a scene. Th
 
 These tools update the same client-side scene graph as the human interface. Agent actions are immediately visible and the user can redirect the scene at any time.
 
+### How WebMCP connects to the stage
+
+```mermaid
+flowchart LR
+  H[Human director\nTypes or speaks a direction] --> P[Direction parser\nCreates validated beats]
+  A[Browser agent] -->|discovers and calls\nstructured WebMCP tools| W[WebMCP adapter\nwebmcp.ts]
+  W --> C[Shared command layer\nscene.ts]
+  P --> C
+  U[React stage controls] --> C
+  C --> S[Single client-side\nSceneState]
+  S --> V[Animated stage, queue\nand activity log]
+  S --> R[Compact scene summary]
+  R -->|tool result| A
+```
+
+Human controls and agent tools never maintain separate state: both use the same validated command layer, then render the resulting `SceneState` in the shared visual stage.
+
 ## Why WebMCP
 
 WebMCP lets StoryStage publish its client-side creative capabilities as structured, discoverable tools for an in-browser agent. That gives the agent direct, dependable access to the stage without forcing it to guess at interface elements or imitate clicks.
