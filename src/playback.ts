@@ -8,6 +8,10 @@ export const STAGE_ACTIONS = [
   "gasp",
   "hide",
   "exit",
+  "ride",
+  "hold",
+  "drop",
+  "shoot",
 ] as const;
 
 export type StageAction = (typeof STAGE_ACTIONS)[number];
@@ -20,6 +24,10 @@ export const STAGE_ZONES = [
   "offstage_right",
   "lamp",
   "crate",
+  "castle",
+  "hillside",
+  "horse",
+  "dragon_roost",
 ] as const;
 
 export type StageZone = (typeof STAGE_ZONES)[number];
@@ -35,11 +43,11 @@ export const STAGE_EXPRESSIONS = [
 
 export type StageExpression = (typeof STAGE_EXPRESSIONS)[number];
 
-export const STAGE_PRESETS = ["fox_detective", "robot"] as const;
+export const STAGE_PRESETS = ["fox_detective", "robot", "knight", "dragon"] as const;
 
 export type StagePreset = (typeof STAGE_PRESETS)[number];
 
-export const STAGE_PROP_IDS = ["lamp", "crate", "clue"] as const;
+export const STAGE_PROP_IDS = ["lamp", "crate", "clue", "castle", "horse", "sword", "bow", "arrow"] as const;
 
 export type StagePropId = (typeof STAGE_PROP_IDS)[number];
 
@@ -70,7 +78,7 @@ export type StageBeat = {
 };
 
 export type SceneState = {
-  sceneId: "neon_alley" | string;
+  sceneId: "neon_alley" | "hillside_quest" | string;
   actors: StageActor[];
   props: StageProp[];
   queue: StageBeat[];
@@ -170,6 +178,10 @@ const DEFAULT_ACTION_DURATIONS: Record<StageAction, number> = {
   gasp: 700,
   hide: 900,
   exit: 1050,
+  ride: 1250,
+  hold: 550,
+  drop: 600,
+  shoot: 900,
 };
 
 const SIDE_BY_ZONE: Partial<Record<StageZone, "left" | "right">> = {
@@ -201,7 +213,7 @@ function resolveDefaultTargetZone(actor: StageActor, beat: BeatInput): StageZone
     return beat.zone;
   }
 
-  if (beat.targetId === "lamp" || beat.targetId === "crate") {
+  if (beat.targetId === "lamp" || beat.targetId === "crate" || beat.targetId === "horse" || beat.targetId === "castle") {
     return beat.targetId;
   }
 
@@ -331,6 +343,14 @@ function buildBeatOutcome(beat: BeatInput, actor: StageActor, before: StageActor
         outcome: locationLabel ? `${after.name} exits toward ${locationLabel}` : `${after.name} exits`,
         effects,
       };
+    case "ride":
+      return { outcome: locationLabel ? `${after.name} rides toward ${locationLabel}` : `${after.name} rides`, effects };
+    case "hold":
+      return { outcome: targetLabel ? `${after.name} holds the ${targetLabel}` : `${after.name} holds an item`, effects };
+    case "drop":
+      return { outcome: targetLabel ? `${after.name} drops the ${targetLabel}` : `${after.name} drops an item`, effects };
+    case "shoot":
+      return { outcome: targetLabel ? `${after.name} shoots at ${targetLabel}` : `${after.name} shoots an arrow`, effects };
     default:
       return {
         outcome: `${after.name} performs ${beat.action}`,
@@ -384,7 +404,7 @@ export function validateBeat(beat: BeatInput, scene: SceneSnapshot): ValidationR
     }
   }
 
-  const needsPosition = beat.action === "walk" || beat.action === "run" || beat.action === "enter" || beat.action === "hide" || beat.action === "exit";
+  const needsPosition = beat.action === "walk" || beat.action === "run" || beat.action === "enter" || beat.action === "hide" || beat.action === "exit" || beat.action === "ride";
   const resolvedZone = resolveDefaultTargetZone(actor, beat);
 
   if (needsPosition && !resolvedZone) {
@@ -428,6 +448,10 @@ export function validateBeat(beat: BeatInput, scene: SceneSnapshot): ValidationR
       actorId: beat.actorId,
       suggestion: "Use targetId crate or zone crate for a visible hiding beat.",
     });
+  }
+
+  if ((beat.action === "hold" || beat.action === "drop" || beat.action === "shoot") && !beat.targetId) {
+    issues.push({ code: "missing-item-target", severity: "error", message: `${beat.action} needs a target, such as sword, bow, arrow, or dragon.`, beatId: beat.id, actorId: beat.actorId });
   }
 
   return {
@@ -513,6 +537,22 @@ export function simulateBeat(scene: SceneSnapshot, beat: BeatInput): {
     case "exit":
       after.visible = false;
       after.zone = normalizedBeat.zone ?? resolveDefaultTargetZone(actor, normalizedBeat);
+      break;
+    case "ride":
+      after.visible = true;
+      after.zone = normalizedBeat.zone ?? actor.zone;
+      after.expression = "happy";
+      break;
+    case "hold":
+      after.visible = true;
+      after.expression = "suspicious";
+      break;
+    case "drop":
+      after.visible = true;
+      break;
+    case "shoot":
+      after.visible = true;
+      after.expression = "suspicious";
       break;
     default:
       break;

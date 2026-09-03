@@ -18,7 +18,7 @@ It is an **agent-native stage where a person and their browser agent co-direct a
 
 The initial version intentionally supports a small animation vocabulary:
 
-`enter` · `walk` · `run` · `point` · `talk` · `laugh` · `gasp` · `hide` · `exit`
+`enter` · `walk` · `run` · `point` · `talk` · `laugh` · `gasp` · `hide` · `exit` · `ride` · `hold` · `drop` · `shoot`
 
 StoryStage maps typed or spoken language to those actions. This allows natural, playful direction while keeping animation reliable enough for a live, repeatable experience.
 
@@ -49,6 +49,7 @@ The result is a shared creative workflow: the agent helps direct, while the brow
 The hackathon MVP focuses on a finished, demoable theater experience:
 
 - A polished 2D stage with a small set of character presets, scenery, and props.
+- Two ready-to-play scenes: the neon alley mystery and a static hillside knight quest with a castle, horse, sword, bow, and arrow.
 - Lightweight character customization: names, palettes, and expressions.
 - Typed direction and browser speech-to-text where supported.
 - A visible action queue, character animation, dialogue bubbles, and simple stage effects.

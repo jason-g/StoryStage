@@ -32,6 +32,23 @@ export const createInitialScene = (): SceneState => ({
   isPlaying: false,
 });
 
+export const createHillsideQuestScene = (): SceneState => ({
+  sceneId: "hillside_quest",
+  actors: [
+    { id: "aria", preset: "knight", name: "Sir Aria", palette: "silver", zone: "horse", expression: "suspicious", visible: true },
+    { id: "ember", preset: "dragon", name: "Ember", palette: "crimson", zone: "dragon_roost", expression: "amused", visible: true },
+  ],
+  props: [
+    { id: "castle", zone: "castle", visible: true },
+    { id: "horse", zone: "horse", visible: true },
+    { id: "sword", zone: "hillside", visible: true },
+    { id: "bow", zone: "hillside", visible: true },
+    { id: "arrow", zone: "hillside", visible: true },
+  ],
+  queue: [],
+  isPlaying: false,
+});
+
 const clone = (state: SceneState): SceneState => ({ ...state, actors: state.actors.map((actor) => ({ ...actor })), props: state.props.map((prop) => ({ ...prop })), queue: state.queue.map((beat) => ({ ...beat })) });
 const failed = (state: SceneState, error: string): SceneCommand<never> => ({ ok: false, state, error });
 const slug = (value: string) => value.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") || "actor";
@@ -50,9 +67,9 @@ export function getSceneSummary(state: SceneState) {
 }
 
 export function createScene(_state: SceneState, input: { sceneId?: unknown } = {}): SceneCommand<ReturnType<typeof getSceneSummary>> {
-  if (input.sceneId !== undefined && input.sceneId !== "neon_alley") return failed(_state, "Only the neon_alley scene is available in this version.");
-  const state = createInitialScene();
-  return { ok: true, state, result: getSceneSummary(state), message: "The neon alley is ready." };
+  if (input.sceneId !== undefined && input.sceneId !== "neon_alley" && input.sceneId !== "hillside_quest") return failed(_state, "Choose neon_alley or hillside_quest.");
+  const state = input.sceneId === "hillside_quest" ? createHillsideQuestScene() : createInitialScene();
+  return { ok: true, state, result: getSceneSummary(state), message: state.sceneId === "hillside_quest" ? "The hillside quest is ready." : "The neon alley is ready." };
 }
 
 export function createCharacter(state: SceneState, input: { preset?: unknown; name?: unknown; palette?: unknown } = {}): SceneCommand<StageActor> {

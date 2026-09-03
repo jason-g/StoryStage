@@ -74,12 +74,19 @@ type ObjectMatch = {
 const DEFAULT_ACTOR_ALIASES: Record<string, string[]> = {
   fenn: ["detective fenn", "fenn", "fox detective", "the fox", "fox"],
   nix: ["nix", "the robot", "robot", "bot"],
+  aria: ["sir aria", "aria", "the knight", "knight"],
+  ember: ["ember", "the dragon", "dragon"],
 };
 
 const DEFAULT_PROP_ALIASES: Record<string, string[]> = {
   lamp: ["lamp", "the lamp"],
   crate: ["crate", "the crate"],
   clue: ["clue", "the clue"],
+  castle: ["castle", "the castle", "keep"],
+  horse: ["horse", "the horse", "steed"],
+  sword: ["sword", "the sword", "blade"],
+  bow: ["bow", "the bow"],
+  arrow: ["arrow", "an arrow", "the arrow"],
 };
 
 const ZONE_ALIASES: Array<{ zone: StageZone; aliases: string[] }> = [
@@ -90,6 +97,10 @@ const ZONE_ALIASES: Array<{ zone: StageZone; aliases: string[] }> = [
   { zone: "offstage_right", aliases: ["offstage right", "off right", "stage right off", "right wing"] },
   { zone: "lamp", aliases: ["lamp", "by the lamp", "at the lamp", "to the lamp", "from the lamp"] },
   { zone: "crate", aliases: ["crate", "by the crate", "at the crate", "to the crate", "behind the crate"] },
+  { zone: "castle", aliases: ["castle", "at the castle", "to the castle", "keep"] },
+  { zone: "hillside", aliases: ["hillside", "hill", "the hill"] },
+  { zone: "horse", aliases: ["horse", "at the horse", "to the horse", "steed"] },
+  { zone: "dragon_roost", aliases: ["dragon roost", "roost", "dragon hill"] },
 ];
 
 const ACTION_RULES: Array<{ action: StageAction; patterns: RegExp[] }> = [
@@ -102,6 +113,10 @@ const ACTION_RULES: Array<{ action: StageAction; patterns: RegExp[] }> = [
   { action: "gasp", patterns: [/\bgasp(?:s|ed|ing)?\b/, /\bpant(?:s|ed|ing)?\b/] },
   { action: "hide", patterns: [/\bhide(?:s|d|ing)?\b/, /\bsneak(?:s|ed|ing)?\b/, /\bcrouch(?:es|ed|ing)?\b/] },
   { action: "exit", patterns: [/\bexit(?:s|ed|ing)?\b/, /\bleav(?:e|es|ing|t)?\b/, /\bdepart(?:s|ed|ing)?\b/] },
+  { action: "ride", patterns: [/\bride(?:s|r|ing)?\b/, /\bmount(?:s|ed|ing)?\b/] },
+  { action: "hold", patterns: [/\bhold(?:s|ing)?\b/, /\bgrip(?:s|ped|ping)?\b/, /\bpick(?:s|ed|ing)?\s+up\b/] },
+  { action: "drop", patterns: [/\bdrop(?:s|ped|ping)?\b/, /\bdiscard(?:s|ed|ing)?\b/] },
+  { action: "shoot", patterns: [/\bshoot(?:s|ing)?\b/, /\bfire(?:s|d|ing)?\b/] },
 ];
 
 const QUOTE_PATTERN = /["“”']([^"“”']+)["“”']/;
@@ -234,7 +249,7 @@ function buildActorAliases(options: DirectionParseOptions): Array<{ actorId: str
     });
   }
 
-  if (!seen.has("fenn")) {
+  if (actors.length === 0 && !seen.has("fenn")) {
     seen.set("fenn", {
       actorId: "fenn",
       actorLabel: "Fenn",
@@ -242,7 +257,7 @@ function buildActorAliases(options: DirectionParseOptions): Array<{ actorId: str
     });
   }
 
-  if (!seen.has("nix")) {
+  if (actors.length === 0 && !seen.has("nix")) {
     seen.set("nix", {
       actorId: "nix",
       actorLabel: "Nix",
@@ -399,12 +414,12 @@ function extractTarget(clause: string, action: StageAction | null, options: Dire
     return fromPreposition;
   };
 
-  if (action === "point" || action === "talk") {
+  if (action === "point" || action === "talk" || action === "hold" || action === "drop" || action === "shoot") {
     const target = findBest((item) => item.kind === "prop" || item.kind === "actor");
     return target ? { targetId: target.id } : {};
   }
 
-  if (action === "enter" || action === "walk" || action === "run" || action === "hide" || action === "exit") {
+  if (action === "enter" || action === "walk" || action === "run" || action === "hide" || action === "exit" || action === "ride") {
     const target = findBest((item) => item.kind === "zone" || item.kind === "prop");
     if (!target) {
       return {};
@@ -487,7 +502,7 @@ export function parseDirection(input: string, options: DirectionParseOptions = {
           `Could not find a supported action in clause "${clause}".`,
           clauseIndex,
           clause,
-          "Use one of enter, walk, run, point, talk, laugh, gasp, hide, or exit.",
+          "Use one of enter, walk, run, point, talk, laugh, gasp, hide, exit, ride, hold, drop, or shoot.",
         ),
       );
       return;
@@ -543,7 +558,7 @@ export function parseDirection(input: string, options: DirectionParseOptions = {
       beat.dialogue = dialogue;
     }
 
-    if (beat.action === "walk" || beat.action === "run" || beat.action === "enter" || beat.action === "hide" || beat.action === "exit") {
+    if (beat.action === "walk" || beat.action === "run" || beat.action === "enter" || beat.action === "hide" || beat.action === "exit" || beat.action === "ride") {
       if (!beat.zone && !beat.targetId) {
         warnings.push(
           buildWarning(
