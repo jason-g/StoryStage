@@ -1,5 +1,5 @@
 import type { CSSProperties } from "react";
-import type { SceneState, StageActor } from "./playback";
+import type { SceneState, StageActor, StageProp } from "./playback";
 import knightArt from "./assets/sir-aria.webp";
 import dragonArt from "./assets/ember.webp";
 import castleArt from "./assets/hillside-castle.webp";
@@ -10,6 +10,7 @@ import "./quest-assets.css";
 import "./horse.css";
 import "./battle.css";
 import "./carried-motion.css";
+import "./object-layer.css";
 
 type Props = { scene: SceneState; activeBeat?: SceneState["queue"][number] | null };
 const positions: Record<string, CSSProperties> = {
@@ -26,9 +27,14 @@ function Actor({ actor, active, action }: { actor: StageActor; active: boolean; 
   </div>;
 }
 
+function MovableProp({ prop }: { prop: StageProp }) {
+  const visual = prop.id === "horse" ? <img src={horseArt} alt="Bramble, a saddled chestnut horse" /> : prop.id === "sword" ? "†" : prop.id === "bow" ? "⌒" : prop.id === "arrow" ? "➤" : prop.id;
+  return <div className={`movable-prop movable-${prop.id}`} style={positions[prop.zone] ?? positions.hillside} aria-label={`${prop.id} object at ${prop.zone.replace("_", " ")}`}>{visual}</div>;
+}
+
 export default function Stage({ scene, activeBeat }: Props) {
   const hillside = scene.sceneId === "hillside_quest";
-  const loose = (id: string) => scene.props.some((prop) => prop.id === id && !prop.heldBy && !(activeBeat?.action === "hold" && activeBeat.targetId === id));
+  const movableProps = scene.props.filter((prop) => (prop.kind === "object" || prop.kind === "entity") && !prop.heldBy && !(activeBeat?.action === "hold" && activeBeat.targetId === prop.id));
   const heldBy = (actorId: string) => scene.props.filter((prop) => prop.heldBy === actorId).map((prop) => prop.id);
   const displayHeldBy = (actorId: string) => {
     const carried = heldBy(actorId);
@@ -38,11 +44,11 @@ export default function Stage({ scene, activeBeat }: Props) {
   return <section className="stage-shell" aria-label={hillside ? "StoryStage hillside quest theater" : "StoryStage neon alley theater"}>
     <header className="marquee"><strong>STORYSTAGE</strong><span>live co-direction theater</span><i /></header>
     <div className={`stage ${hillside ? "hillside-stage" : ""}`} aria-live="polite">
-      {hillside ? <><div className="hill-back" /><div className="hill-front" /><img className="castle-art" src={castleArt} alt="A stone castle on the hillside" />{loose("horse") && <img className="horse-art" src={horseArt} alt="Bramble, a saddled chestnut horse" />}{loose("sword") && <div className="sword">†</div>}{loose("bow") && <div className="bow">⌒</div>}{loose("arrow") && <div className="arrow">➤</div>}<div className="floor" /></> : <><div className="rain" /><div className="moon" /><div className="city left-city" /><div className="city right-city" /><div className="neon">NIGHT<br /><em>OWL</em></div><div className="lamp"><b /><i /></div><div className="clue">✦</div><div className="crate">CLUE</div><div className="floor" /></>}
+      {hillside ? <><div className="hill-back" /><div className="hill-front" /><img className="castle-art" src={castleArt} alt="A stone castle on the hillside" />{movableProps.map((prop) => <MovableProp key={prop.id} prop={prop} />)}<div className="floor" /></> : <><div className="rain" /><div className="moon" /><div className="city left-city" /><div className="city right-city" /><div className="neon">NIGHT<br /><em>OWL</em></div><div className="lamp"><b /><i /></div><div className="clue">✦</div><div className="crate">CLUE</div><div className="floor" /></>}
       {scene.actors.filter((actor) => actor.visible).map((actor) => { const carried = displayHeldBy(actor.id); const moving = actor.id === activeBeat?.actorId && ["enter", "walk", "run", "ride", "fly", "fall"].includes(activeBeat.action); const picking = actor.id === activeBeat?.actorId && activeBeat.action === "hold"; const dropping = actor.id === activeBeat?.actorId && activeBeat.action === "drop"; return <div className="actor-slot" key={actor.id} style={positions[actor.zone] ?? positions.center}>{carried.includes("horse") && <img className="mounted-horse" src={horseArt} alt="" />}<Actor actor={actor} active={actor.id === activeBeat?.actorId} action={actor.id === activeBeat?.actorId ? activeBeat.action : undefined} />{carried.filter((id) => id !== "horse").length > 0 && <div className={`carried-items ${moving ? "moving" : ""} ${picking ? "picking" : ""} ${dropping ? "dropping" : ""}`}>{carried.filter((id) => id !== "horse").map((id) => <span className={`carried-${id}`} key={id}>{id === "sword" ? "†" : id === "bow" ? "⌒" : id === "arrow" ? "➤" : id}</span>)}</div>}{activeBeat?.actorId === actor.id && <div className="bubble">{activeBeat.dialogue || activeBeat.action.toUpperCase()}</div>}</div>; })}
       {activeBeat && ["shoot", "attack", "fall"].includes(activeBeat.action) && <div className={`battle-effect effect-${activeBeat.action}`} aria-hidden="true">{activeBeat.action === "shoot" ? "➤" : activeBeat.action === "attack" ? "✦" : "✹"}</div>}
       {activeBeat && <div className="caption"><b>{scene.actors.find((a) => a.id === activeBeat.actorId)?.name}</b> · {activeBeat.action}</div>}
     </div>
-    <footer className="stage-footer">{hillside ? <><span>♜ castle</span><span>♞ horse</span><span>† sword · bow · arrow</span><span>13 action vocabulary</span></> : <><span>● lamp</span><span>● crate</span><span>✦ clue</span><span>13 action vocabulary</span></>}</footer>
+    <footer className="stage-footer">{hillside ? <><span>♜ castle · scenery</span><span>♞ horse · entity</span><span>† sword · bow · arrow · objects</span><span>16 action vocabulary</span></> : <><span>● lamp</span><span>● crate</span><span>✦ clue</span><span>16 action vocabulary</span></>}</footer>
   </section>;
 }

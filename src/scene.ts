@@ -24,9 +24,9 @@ export const createInitialScene = (): SceneState => ({
     { id: "nix", preset: "robot", name: "Nix", palette: "teal", zone: "offstage_right", expression: "worried", visible: false },
   ],
   props: [
-    { id: "lamp", zone: "lamp", visible: true },
-    { id: "crate", zone: "crate", visible: true },
-    { id: "clue", zone: "center", visible: true },
+    { id: "lamp", zone: "lamp", visible: true, kind: "scenery" },
+    { id: "crate", zone: "crate", visible: true, kind: "scenery" },
+    { id: "clue", zone: "center", visible: true, kind: "object" },
   ],
   queue: [],
   isPlaying: false,
@@ -39,11 +39,11 @@ export const createHillsideQuestScene = (): SceneState => ({
     { id: "ember", preset: "dragon", name: "Ember", palette: "crimson", zone: "dragon_roost", expression: "amused", visible: true },
   ],
   props: [
-    { id: "castle", zone: "castle", visible: true },
-    { id: "horse", zone: "horse", visible: true },
-    { id: "sword", zone: "hillside", visible: true },
-    { id: "bow", zone: "hillside", visible: true },
-    { id: "arrow", zone: "hillside", visible: true },
+    { id: "castle", zone: "castle", visible: true, kind: "scenery" },
+    { id: "horse", zone: "horse", visible: true, kind: "entity" },
+    { id: "sword", zone: "hillside", visible: true, kind: "object" },
+    { id: "bow", zone: "hillside", visible: true, kind: "object" },
+    { id: "arrow", zone: "hillside", visible: true, kind: "object" },
   ],
   queue: [],
   isPlaying: false,
@@ -60,7 +60,7 @@ export function getSceneSummary(state: SceneState) {
   return {
     scene: state.sceneId,
     actors: state.actors.map(({ id, preset, name, palette, zone, expression, visible }) => ({ id, preset, name, palette, zone, expression, visible })),
-    props: state.props.map(({ id, zone, visible, heldBy }) => ({ id, zone, visible: visible !== false, heldBy })),
+    props: state.props.map(({ id, zone, visible, heldBy, kind }) => ({ id, zone, visible: visible !== false, heldBy, kind })),
     queue: state.queue.map(({ id, actorId, action, targetId, zone, dialogue, status }) => ({ id, actor: actorId, action, targetId, zone, dialogue, status })),
     isPlaying: state.isPlaying,
   };

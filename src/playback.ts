@@ -71,6 +71,7 @@ export type StageProp = {
   zone: StageZone;
   visible?: boolean;
   heldBy?: string;
+  kind?: "scenery" | "entity" | "object";
 };
 
 export type StageBeat = {
