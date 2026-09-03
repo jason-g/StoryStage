@@ -105,16 +105,16 @@ Open the local URL printed by Vite. Build a production bundle with `npm run buil
 
 ### Authenticated contest preview
 
-StoryStage is configured for Cloudflare Pages. The Pages Function in `functions/_middleware.js` protects every production route with HTTP Basic authentication, while local Vite development remains unchanged.
+StoryStage is configured for Cloudflare Workers Static Assets. The Worker in `worker.js` protects every production route with HTTP Basic authentication, while local Vite development remains unchanged.
 
-1. Connect this repository to a Cloudflare Pages project.
-2. Set the build command to `npm run build` and the output directory to `dist`.
-3. Add encrypted production variables named `BASIC_AUTH_USERNAME` and `BASIC_AUTH_PASSWORD` in **Settings → Variables and Secrets**. Do not commit their values.
-4. Deploy, open the HTTPS Pages URL in a private browser window, and verify that invalid credentials are rejected before sharing the URL and credentials with contest testers.
+1. In **Workers & Pages**, create an application, continue with GitHub, and select this repository.
+2. Set the build command to `npm run build` and keep the deploy command as `npx wrangler deploy`.
+3. Deploy once, then add encrypted runtime secrets named `BASIC_AUTH_USERNAME` and `BASIC_AUTH_PASSWORD` in **Settings → Variables and Secrets**. Do not commit their values.
+4. Redeploy, open the HTTPS Workers URL in a private browser window, and verify that invalid credentials are rejected before sharing the URL and credentials with contest testers.
 
-The middleware deliberately returns `503` when either credential is missing so a misconfigured preview cannot become public accidentally. The local MCP bridge must not be deployed; production WebMCP tools are registered directly by the page in a compatible browser.
+The Worker deliberately returns `503` when either credential is missing so a misconfigured preview cannot become public accidentally. The local MCP bridge must not be deployed; production WebMCP tools are registered directly by the page in a compatible browser.
 
-For CLI deployment, authenticate Wrangler locally and run `npx wrangler pages deploy dist` after `npm run build`. The included `wrangler.toml` supplies the project build directory.
+For CLI deployment, authenticate Wrangler locally, run `npm run build`, then run `npx wrangler deploy`. The included `wrangler.toml` configures the Worker entry point, SPA routing, and `dist` asset directory.
 
 ### Control from a Codex chat
 
@@ -135,10 +135,10 @@ The app also works in browsers without the experimental WebMCP API: the status b
 
 ### Deploy
 
-The app is a static Vite site. Connect this repository to Vercel, Netlify, or Cloudflare Pages and use:
+The app is a static Vite site deployed with Cloudflare Workers Static Assets. Workers Builds uses:
 
 - Build command: `npm run build`
-- Output directory: `dist`
+- Deploy command: `npx wrangler deploy`
 - Node version: 20.19+ or 22+
 
 After deploying, add the public URL to [SUBMISSION_PROPOSAL.md](docs/SUBMISSION_PROPOSAL.md) before submitting.
