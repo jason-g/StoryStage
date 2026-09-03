@@ -74,7 +74,7 @@ type ObjectMatch = {
 const DEFAULT_ACTOR_ALIASES: Record<string, string[]> = {
   fenn: ["detective fenn", "fenn", "fox detective", "the fox", "fox"],
   nix: ["nix", "the robot", "robot", "bot"],
-  aurthor: ["sir aurthor", "aurthor", "the knight", "knight", "brave knight", "brave night", "sir aria", "aria"],
+  arthur: ["sir arthur", "arthur", "sir aurthor", "aurthor", "the knight", "knight", "brave knight", "brave night", "sir aria", "aria"],
   ember: ["ember", "the dragon", "dragon"],
 };
 

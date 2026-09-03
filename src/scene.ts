@@ -35,7 +35,7 @@ export const createInitialScene = (): SceneState => ({
 export const createHillsideQuestScene = (): SceneState => ({
   sceneId: "hillside_quest",
   actors: [
-    { id: "aurthor", preset: "knight", name: "Sir Aurthor", palette: "silver", zone: "horse", expression: "suspicious", visible: true },
+    { id: "arthur", preset: "knight", name: "Sir Arthur", palette: "silver", zone: "horse", expression: "suspicious", visible: true },
     { id: "ember", preset: "dragon", name: "Ember", palette: "crimson", zone: "dragon_roost", expression: "amused", visible: true },
   ],
   props: [
