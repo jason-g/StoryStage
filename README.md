@@ -100,7 +100,7 @@ The app is a static Vite site. Connect this repository to Vercel, Netlify, or Cl
 - Output directory: `dist`
 - Node version: 20.19+ or 22+
 
-After deploying, add the public URL to [SUBMISSION_PROPOSAL.md](SUBMISSION_PROPOSAL.md) before submitting.
+After deploying, add the public URL to [SUBMISSION_PROPOSAL.md](docs/SUBMISSION_PROPOSAL.md) before submitting.
 
 ## Testing WebMCP
 
