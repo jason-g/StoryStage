@@ -116,7 +116,7 @@ const ACTION_RULES: Array<{ action: StageAction; patterns: RegExp[] }> = [
   { action: "hide", patterns: [/\bhide(?:s|d|ing)?\b/, /\bsneak(?:s|ed|ing)?\b/, /\bcrouch(?:es|ed|ing)?\b/] },
   { action: "exit", patterns: [/\bexit(?:s|ed|ing)?\b/, /\bleav(?:e|es|ing|t)?\b/, /\bdepart(?:s|ed|ing)?\b/] },
   { action: "ride", patterns: [/\bride(?:s|r|ing)?\b/, /\bmount(?:s|ed|ing)?\b/] },
-  { action: "hold", patterns: [/\bhold(?:s|ing)?\b/, /\bgrip(?:s|ped|ping)?\b/, /\bpick(?:s|ed|ing)?\s+up\b/] },
+  { action: "hold", patterns: [/\bhold(?:s|ing)?\b/, /\bheld\b/, /\bgrip(?:s|ped|ping)?\b/, /\bpick(?:s|ed|ing)?\s+up\b/, /\bcarry(?:ing)?\b/, /\bcarries\b/, /\bcarried\b/, /\bgrab(?:s|bed|bing)?\b/, /\btake(?:s|n)?\b/, /\btook\b/] },
   { action: "drop", patterns: [/\bdrop(?:s|ped|ping)?\b/, /\bdiscard(?:s|ed|ing)?\b/] },
   { action: "shoot", patterns: [/\bshoot(?:s|ing)?\b/, /\bfire(?:s|d|ing)?\b/] },
   { action: "fly", patterns: [/\bfly(?:s|ing)?\b/, /\bsoar(?:s|ed|ing)?\b/] },
@@ -424,6 +424,10 @@ function extractTarget(clause: string, action: StageAction | null, options: Dire
       const actorTarget = objectCandidates.find((item) => item.kind === "actor" && item.index > 0);
       if (actorTarget) return { targetId: actorTarget.id };
     }
+    if (action === "hold" || action === "drop") {
+      const propTarget = findBest((item) => item.kind === "prop");
+      return propTarget ? { targetId: propTarget.id } : {};
+    }
     const target = findBest((item) => item.kind === "prop" || item.kind === "actor");
     return target ? { targetId: target.id } : {};
   }
@@ -598,6 +602,20 @@ export function parseDirection(input: string, options: DirectionParseOptions = {
           "Add a prop or character after at, toward, or to.",
         ),
       );
+    }
+
+    if (beat.action === "hold" || beat.action === "drop") {
+      const propTargets = Array.from(new Set(
+        resolveObjectMentions(clause, options)
+          .filter((match) => match.kind === "prop")
+          .map((match) => match.id),
+      ));
+      if (propTargets.length > 1) {
+        propTargets.forEach((targetId, targetIndex) => {
+          beats.push({ ...beat, id: `beat-${clauseIndex + 1}-${targetIndex + 1}`, targetId });
+        });
+        return;
+      }
     }
 
     beats.push(beat);

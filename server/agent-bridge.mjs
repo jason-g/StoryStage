@@ -9,7 +9,7 @@ const tools = [
   { name: "create_scene", description: "Start the neon alley mystery or hillside knight quest.", inputSchema: { type: "object", properties: { sceneId: { type: "string", enum: ["neon_alley", "hillside_quest"] } }, required: ["sceneId"], additionalProperties: false } },
   { name: "create_character", description: "Add a supported character to the current StoryStage scene.", inputSchema: { type: "object", properties: { preset: { type: "string", enum: ["fox_detective", "robot", "knight", "dragon"] }, name: { type: "string", minLength: 1, maxLength: 32 }, palette: { type: "string" } }, required: ["preset", "name"], additionalProperties: false } },
   { name: "place_actor", description: "Place an actor in a named stage zone.", inputSchema: { type: "object", properties: { actorId: { type: "string" }, zone: { type: "string" } }, required: ["actorId", "zone"], additionalProperties: false } },
-  { name: "direct_action", description: "Queue one atomic StoryStage action. Call get_scene_state before directing.", inputSchema: { type: "object", properties: { actorId: { type: "string" }, action: { type: "string" }, targetId: { type: "string" }, zone: { type: "string" }, dialogue: { type: "string", maxLength: 140 } }, required: ["actorId", "action"], additionalProperties: false } },
+  { name: "direct_action", description: "Queue one atomic StoryStage action. Call get_scene_state first. Use hold with an object targetId for hold, carry, pick up, take, or grab; it attaches the object to the actor until drop.", inputSchema: { type: "object", properties: { actorId: { type: "string" }, action: { type: "string" }, targetId: { type: "string" }, zone: { type: "string" }, dialogue: { type: "string", maxLength: 140 } }, required: ["actorId", "action"], additionalProperties: false } },
   { name: "set_expression", description: "Set an actor's supported expression.", inputSchema: { type: "object", properties: { actorId: { type: "string" }, expression: { type: "string" } }, required: ["actorId", "expression"], additionalProperties: false } },
   { name: "play_scene", description: "Play queued StoryStage beats in sequence.", inputSchema: { type: "object", properties: { beatIds: { type: "array", items: { type: "string" } } }, additionalProperties: false } },
 ];
@@ -18,6 +18,7 @@ let scene = null;
 let commandId = 0;
 const commands = [];
 const pending = new Map();
+const commandWaiters = new Set();
 
 const json = (response, status, body) => {
   response.writeHead(status, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" });
@@ -41,6 +42,32 @@ const withCors = (request, response) => {
   response.setHeader("Access-Control-Allow-Headers", "Content-Type");
 };
 
+const commandsAfter = (after) => commands.filter((command) => command.sequence > after);
+
+const waitForCommands = (after, waitMs, response) => {
+  const waiter = { after, response, timer: undefined };
+  const finish = () => {
+    if (!commandWaiters.delete(waiter) || response.writableEnded) return;
+    clearTimeout(waiter.timer);
+    json(response, 200, { commands: commandsAfter(after) });
+  };
+  waiter.timer = setTimeout(finish, waitMs);
+  response.once("close", () => {
+    if (commandWaiters.delete(waiter)) clearTimeout(waiter.timer);
+  });
+  commandWaiters.add(waiter);
+};
+
+const notifyCommandWaiters = () => {
+  for (const waiter of [...commandWaiters]) {
+    const available = commandsAfter(waiter.after);
+    if (!available.length) continue;
+    commandWaiters.delete(waiter);
+    clearTimeout(waiter.timer);
+    if (!waiter.response.writableEnded) json(waiter.response, 200, { commands: available });
+  }
+};
+
 const server = http.createServer(async (request, response) => {
   withCors(request, response);
   if (request.method === "OPTIONS") return response.writeHead(204).end();
@@ -49,7 +76,11 @@ const server = http.createServer(async (request, response) => {
     if (request.method === "GET" && url.pathname === "/health") return json(response, 200, { ok: true, connected: scene !== null });
     if (request.method === "GET" && url.pathname === "/commands") {
       const after = Number(url.searchParams.get("after") ?? 0);
-      return json(response, 200, { commands: commands.filter((command) => command.sequence > after) });
+      const available = commandsAfter(after);
+      const waitMs = Math.min(Math.max(Number(url.searchParams.get("wait") ?? 0), 0), 30_000);
+      if (available.length || waitMs === 0) return json(response, 200, { commands: available });
+      waitForCommands(after, waitMs, response);
+      return;
     }
     if (request.method === "POST" && url.pathname === "/scene") {
       scene = await readJson(request);
@@ -85,6 +116,7 @@ const callBrowser = (name, args) => new Promise((resolve) => {
   pending.set(id, { resolve: (result) => { clearTimeout(timeout); resolve(result); } });
   commands.push({ id, sequence: id, name, arguments: args && typeof args === "object" ? args : {} });
   if (commands.length > 200) commands.splice(0, commands.length - 200);
+  notifyCommandWaiters();
 });
 
 let buffer = "";

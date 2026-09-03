@@ -14,5 +14,5 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const publishScene = (scene: unknown) => request<{ ok: true }>("/scene", { method: "POST", body: JSON.stringify(scene) });
-export const getBridgeCommands = (after: number) => request<{ commands: AgentBridgeCommand[] }>(`/commands?after=${after}`);
+export const getBridgeCommands = (after: number, signal?: AbortSignal) => request<{ commands: AgentBridgeCommand[] }>(`/commands?after=${after}&wait=25000`, { signal });
 export const completeBridgeCommand = (id: number, result: unknown) => request<{ ok: true }>(`/results/${id}`, { method: "POST", body: JSON.stringify(result) });

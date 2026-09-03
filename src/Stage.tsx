@@ -1,5 +1,6 @@
 import type { CSSProperties } from "react";
 import type { SceneState, StageActor, StageProp } from "./playback";
+import { getBeatDuration } from "./playback";
 import knightArt from "./assets/sir-aurthor.webp";
 import dragonArt from "./assets/ember-puppet.webp";
 import castleArt from "./assets/hillside-castle.webp";
@@ -14,6 +15,7 @@ import "./horse.css";
 import "./battle.css";
 import "./carried-motion.css";
 import "./object-layer.css";
+import "./performance.css";
 
 type Props = { scene: SceneState; activeBeat?: SceneState["queue"][number] | null };
 const positions: Record<string, CSSProperties> = {
@@ -42,14 +44,17 @@ function CarriedProp({ id }: { id: string }) {
 
 export default function Stage({ scene, activeBeat }: Props) {
   const hillside = scene.sceneId === "hillside_quest";
-  const movableProps = scene.props.filter((prop) => (prop.kind === "object" || prop.kind === "entity") && !prop.heldBy && !(activeBeat?.action === "hold" && activeBeat.targetId === prop.id));
+  const movement = activeBeat && ["enter", "walk", "run", "hide", "exit", "ride", "fly", "fall"].includes(activeBeat.action);
+  const movementStyle = movement ? { "--movement-duration": `${getBeatDuration(activeBeat.action) / 0.25}ms` } as CSSProperties : undefined;
+  const activeCarriedTarget = activeBeat?.action === "ride" ? activeBeat.targetId ?? "horse" : activeBeat?.action === "hold" ? activeBeat.targetId : undefined;
+  const movableProps = scene.props.filter((prop) => (prop.kind === "object" || prop.kind === "entity") && !prop.heldBy && activeCarriedTarget !== prop.id);
   const heldBy = (actorId: string) => scene.props.filter((prop) => prop.heldBy === actorId).map((prop) => prop.id);
   const displayHeldBy = (actorId: string) => {
     const carried = heldBy(actorId);
-    if (activeBeat?.actorId === actorId && activeBeat.action === "hold" && activeBeat.targetId && scene.props.some((prop) => prop.id === activeBeat.targetId)) return [...new Set([...carried, activeBeat.targetId])];
+    if (activeBeat?.actorId === actorId && activeCarriedTarget && scene.props.some((prop) => prop.id === activeCarriedTarget)) return [...new Set([...carried, activeCarriedTarget])];
     return carried;
   };
-  return <section className="stage-shell" aria-label={hillside ? "StoryStage hillside quest theater" : "StoryStage neon alley theater"}>
+  return <section className="stage-shell" style={movementStyle} aria-label={hillside ? "StoryStage hillside quest theater" : "StoryStage neon alley theater"}>
     <header className="marquee"><strong>STORYSTAGE</strong><span>live co-direction theater</span><i /></header>
     <div className={`stage ${hillside ? "hillside-stage" : ""}`} aria-live="polite">
       {hillside ? <><div className="hill-back" /><div className="hill-front" /><img className="castle-art" src={castleArt} alt="A stone castle on the hillside" />{movableProps.map((prop) => <MovableProp key={prop.id} prop={prop} />)}<div className="floor" /></> : <><div className="rain" /><div className="moon" /><div className="city left-city" /><div className="city right-city" /><div className="neon">NIGHT<br /><em>OWL</em></div><div className="lamp"><b /><i /></div><div className="clue">✦</div><div className="crate">CLUE</div><div className="floor" /></>}

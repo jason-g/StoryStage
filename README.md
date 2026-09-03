@@ -103,6 +103,19 @@ npm run dev
 
 Open the local URL printed by Vite. Build a production bundle with `npm run build`, then test it locally with `npm run preview`.
 
+### Authenticated contest preview
+
+StoryStage is configured for Cloudflare Pages. The Pages Function in `functions/_middleware.js` protects every production route with HTTP Basic authentication, while local Vite development remains unchanged.
+
+1. Connect this repository to a Cloudflare Pages project.
+2. Set the build command to `npm run build` and the output directory to `dist`.
+3. Add encrypted production variables named `BASIC_AUTH_USERNAME` and `BASIC_AUTH_PASSWORD` in **Settings → Variables and Secrets**. Do not commit their values.
+4. Deploy, open the HTTPS Pages URL in a private browser window, and verify that invalid credentials are rejected before sharing the URL and credentials with contest testers.
+
+The middleware deliberately returns `503` when either credential is missing so a misconfigured preview cannot become public accidentally. The local MCP bridge must not be deployed; production WebMCP tools are registered directly by the page in a compatible browser.
+
+For CLI deployment, authenticate Wrangler locally and run `npx wrangler pages deploy dist` after `npm run build`. The included `wrangler.toml` supplies the project build directory.
+
 ### Control from a Codex chat
 
 StoryStage includes an opt-in local MCP bridge for agents that do not have direct browser WebMCP support. It is intentionally local-only: the bridge listens on `127.0.0.1:4175`, and the page must have **Agent Control** enabled before any agent command can affect the stage.

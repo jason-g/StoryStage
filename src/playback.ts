@@ -150,6 +150,7 @@ export type BeatPlaybackPlan = {
   outcome: string;
   effects: PlaybackEffect[];
   nextActorState: StageActor | null;
+  nextPropsState: StageProp[] | null;
 };
 
 export type PlaybackPlan = {
@@ -467,7 +468,16 @@ export function validateBeat(beat: BeatInput, scene: SceneSnapshot): ValidationR
   }
 
   if ((beat.action === "hold" || beat.action === "drop" || beat.action === "shoot") && !beat.targetId) {
-    issues.push({ code: "missing-item-target", severity: "error", message: `${beat.action} needs a target, such as sword, bow, arrow, or dragon.`, beatId: beat.id, actorId: beat.actorId });
+    issues.push({ code: "missing-item-target", severity: "error", message: `${beat.action} needs a target, such as sword, bow, or arrow.`, beatId: beat.id, actorId: beat.actorId });
+  }
+
+  if (beat.action === "hold" && beat.targetId) {
+    const heldProp = findProp(scene, beat.targetId);
+    if (!heldProp || heldProp.kind === "scenery") {
+      issues.push({ code: "invalid-held-target", severity: "error", message: `${actor.name} can hold or carry a movable object, not ${formatTargetLabel(scene, beat.targetId)}.`, beatId: beat.id, actorId: beat.actorId });
+    } else if (heldProp.heldBy && heldProp.heldBy !== actor.id) {
+      issues.push({ code: "object-already-held", severity: "error", message: `${heldProp.id} is already held by another actor.`, beatId: beat.id, actorId: beat.actorId });
+    }
   }
 
   if (beat.action === "attack" && !beat.targetId) {
@@ -510,6 +520,7 @@ export function simulateBeat(scene: SceneSnapshot, beat: BeatInput): {
       outcome: `Blocked: actor ${beat.actorId} is missing.`,
       effects: [],
       nextActorState: null,
+      nextPropsState: null,
     };
 
     return {
@@ -593,7 +604,7 @@ export function simulateBeat(scene: SceneSnapshot, beat: BeatInput): {
   }
 
   let nextProps = scene.props.map((prop) => ({ ...prop }));
-  if (["enter", "walk", "run", "ride"].includes(normalizedBeat.action)) {
+  if (["enter", "walk", "run", "hide", "exit", "ride", "fly", "fall"].includes(normalizedBeat.action)) {
     nextProps = nextProps.map((prop) => prop.heldBy === actor.id ? { ...prop, zone: after.zone } : prop);
   }
   if (normalizedBeat.action === "hold" && normalizedBeat.targetId) {
@@ -629,6 +640,7 @@ export function simulateBeat(scene: SceneSnapshot, beat: BeatInput): {
     outcome,
     effects,
     nextActorState: after,
+    nextPropsState: nextProps,
   };
 
   return {

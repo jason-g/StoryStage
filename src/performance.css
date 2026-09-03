@@ -1,0 +1,22 @@
+/* Avoid stacking two expensive drop-shadow filters on quest artwork. */
+.actor.knight,
+.actor.dragon {
+  filter: none;
+}
+
+.actor.active {
+  will-change: transform;
+}
+
+.actor.active .actor-art {
+  filter: none;
+}
+
+.stage-shell .actor-slot {
+  transition-duration: var(--movement-duration, 0.8s);
+}
+
+.actor.active.action-fly,
+.actor.active.action-fall {
+  animation-duration: var(--movement-duration, 1s);
+}

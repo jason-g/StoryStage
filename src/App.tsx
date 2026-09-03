@@ -16,6 +16,8 @@ type SpeechFactory = new () => SpeechSession;
 const examples = ["Nix enters from the right, walks to the crate, gasps, and hides.", "Fenn points at the clue and says ‘I found it!’", "Fenn laughs, then Nix exits right."];
 const questExamples = ["Sir Arthur rides the horse from the castle towards the right, while Ember flies in from the top right.", "The brave knight shoots at Ember with an arrow; Ember falls to the ground.", "Out of arrows, the knight drops the bow, moves right, and attacks Ember."];
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+const MOVEMENT_PLAYBACK_RATE = 0.25;
+const movementActions = new Set(["enter", "walk", "run", "hide", "exit", "ride", "fly", "fall"]);
 
 export default function App() {
   const [scene, setScene] = useState<SceneState>(createHillsideQuestScene);
@@ -61,10 +63,23 @@ export default function App() {
     for (const planBeat of plan.beats) {
       const liveBeat = stateRef.current.queue.find((beat) => beat.id === planBeat.beatId);
       if (!liveBeat) continue;
-      const begin = updateBeatStatus(stateRef.current, planBeat.beatId, "playing");
+      const movement = movementActions.has(planBeat.action);
+      const begin = updateBeatStatus(
+        stateRef.current,
+        planBeat.beatId,
+        "playing",
+        movement ? planBeat.nextActorState : null,
+        movement ? planBeat.nextPropsState : null,
+      );
       stateRef.current = begin; setScene(begin); setActiveBeat({ ...liveBeat, status: "playing" });
-      await wait(Math.min(planBeat.timing.durationMs, 1150));
-      const complete = updateBeatStatus(stateRef.current, planBeat.beatId, "complete", planBeat.nextActorState);
+      await wait(movement ? planBeat.timing.durationMs / MOVEMENT_PLAYBACK_RATE : Math.min(planBeat.timing.durationMs, 1150));
+      const complete = updateBeatStatus(
+        stateRef.current,
+        planBeat.beatId,
+        "complete",
+        movement ? null : planBeat.nextActorState,
+        movement ? null : planBeat.nextPropsState,
+      );
       stateRef.current = complete; setScene(complete);
     }
     const complete = { ...stateRef.current, isPlaying: false };
@@ -95,7 +110,15 @@ export default function App() {
     if (!agentControl) return;
     let active = true;
     let cursor = 0;
-    let timer: number | undefined;
+    const controller = new AbortController();
+    let lastPublishedScene = "";
+    const publishIfChanged = async () => {
+      const summary = getSceneSummary(stateRef.current);
+      const serialized = JSON.stringify(summary);
+      if (serialized === lastPublishedScene) return;
+      await publishScene(summary);
+      lastPublishedScene = serialized;
+    };
     const executeCommand = async (command: AgentBridgeCommand) => {
       switch (command.name) {
         case "create_scene": return commit(createScene(stateRef.current, command.arguments), "Agent");
@@ -107,25 +130,30 @@ export default function App() {
       }
     };
     const sync = async () => {
-      try {
-        await publishScene(getSceneSummary(stateRef.current));
-        const { commands } = await getBridgeCommands(cursor);
-        if (!active) return;
-        setBridgeStatus("ready");
-        for (const command of commands) {
-          const result = await executeCommand(command);
-          await completeBridgeCommand(command.id, result);
-          cursor = command.sequence;
-          await publishScene(getSceneSummary(stateRef.current));
+      while (active) {
+        try {
+          await publishIfChanged();
+          const { commands } = await getBridgeCommands(cursor, controller.signal);
+          if (!active) return;
+          setBridgeStatus("ready");
+          // Older bridge processes return immediately instead of holding the request.
+          // Back off so a hot-reloaded client can never spin while Codex restarts the bridge.
+          if (!commands.length) await wait(500);
+          for (const command of commands) {
+            const result = await executeCommand(command);
+            await completeBridgeCommand(command.id, result);
+            cursor = command.sequence;
+            await publishIfChanged();
+          }
+        } catch (error) {
+          if (!active || (error instanceof DOMException && error.name === "AbortError")) return;
+          setBridgeStatus("unavailable");
+          await wait(1500);
         }
-      } catch {
-        if (active) setBridgeStatus("unavailable");
-      } finally {
-        if (active) timer = window.setTimeout(() => void sync(), 350);
       }
     };
     void sync();
-    return () => { active = false; if (timer) window.clearTimeout(timer); };
+    return () => { active = false; controller.abort(); };
   // The bridge's handlers intentionally read the mutable live SceneState, avoiding a reconnect after every animation frame.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [agentControl]);

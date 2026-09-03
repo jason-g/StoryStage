@@ -129,9 +129,10 @@ export function clearQueue(state: SceneState): SceneCommand<null> {
   return { ok: true, state: next, result: null, message: "The action queue was cleared." };
 }
 
-export function updateBeatStatus(state: SceneState, beatId: string, status: SceneState["queue"][number]["status"], actorAfter?: StageActor | null): SceneState {
+export function updateBeatStatus(state: SceneState, beatId: string, status: SceneState["queue"][number]["status"], actorAfter?: StageActor | null, propsAfter?: SceneState["props"] | null): SceneState {
   const next = clone(state);
   next.queue = next.queue.map((beat) => beat.id === beatId ? { ...beat, status } : beat);
   if (actorAfter) next.actors = next.actors.map((actor) => actor.id === actorAfter.id ? { ...actorAfter } : actor);
+  if (propsAfter) next.props = propsAfter.map((prop) => ({ ...prop }));
   return next;
 }
