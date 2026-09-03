@@ -103,6 +103,17 @@ npm run dev
 
 Open the local URL printed by Vite. Build a production bundle with `npm run build`, then test it locally with `npm run preview`.
 
+### Control from a Codex chat
+
+StoryStage includes an opt-in local MCP bridge for agents that do not have direct browser WebMCP support. It is intentionally local-only: the bridge listens on `127.0.0.1:4175`, and the page must have **Agent Control** enabled before any agent command can affect the stage.
+
+1. Run the app with `npm run dev` and open it in your browser.
+2. Add the bridge to Codex as a local STDIO MCP server. In Codex Desktop, choose **Settings → MCP servers → Add server**, choose **STDIO**, set the command to `node`, and set its argument to the absolute path of `server/agent-bridge.mjs`. Restart Codex after saving; Codex starts the bridge automatically.
+3. In the page, turn on **Agent Control**. Its status should become **Connected** once the bridge is running.
+4. In the Codex chat, ask: “Call `get_scene_state`, then queue Sir Aurthor to hold the sword and play the scene.” The agent reads the live state first, sends atomic directions, and the visible browser scene carries them out.
+
+The bridge exposes the same agent-facing tools as WebMCP: `get_scene_state`, `create_scene`, `create_character`, `place_actor`, `direct_action`, `set_expression`, and `play_scene`. `npm run agent-bridge` is available only for local bridge diagnostics; do not run it separately when Codex is configured to launch the server. Keep Agent Control off when you are not using it.
+
 ### Architecture
 
 StoryStage keeps the entire scene in one client-side state model. The React controls, natural-language parser, playback engine, and WebMCP handlers all issue the same validated scene commands. No API key, backend, account, or database is required for the MVP.

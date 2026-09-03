@@ -4,6 +4,7 @@ import { parseDirectionForScene } from "./parser";
 import { buildPlaybackPlan, STAGE_ACTIONS, STAGE_EXPRESSIONS, STAGE_ZONES, type SceneState } from "./playback";
 import { clearQueue, createCharacter, createInitialScene, createScene, getSceneSummary, placeActor, queueAction, setExpression, updateBeatStatus, type SceneCommand } from "./scene";
 import { registerStoryStageTools } from "./webmcp";
+import { completeBridgeCommand, getBridgeCommands, publishScene, type AgentBridgeCommand } from "./agentBridge";
 import "./ui.css";
 import "./scene-ui.css";
 import "./voice.css";
@@ -23,6 +24,8 @@ export default function App() {
   const [activity, setActivity] = useState<Activity[]>([{ id: 0, source: "Stage", text: "Demo scene initialized: Fenn is watching the clue." }]);
   const [activeBeat, setActiveBeat] = useState<SceneState["queue"][number] | null>(null);
   const [agentReady, setAgentReady] = useState(false);
+  const [agentControl, setAgentControl] = useState(false);
+  const [bridgeStatus, setBridgeStatus] = useState<"off" | "connecting" | "ready" | "unavailable">("off");
   const [listening, setListening] = useState(false);
   const [liveStory, setLiveStory] = useState(true);
   const stateRef = useRef(scene);
@@ -88,6 +91,45 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    if (!agentControl) return;
+    let active = true;
+    let cursor = 0;
+    let timer: number | undefined;
+    const executeCommand = async (command: AgentBridgeCommand) => {
+      switch (command.name) {
+        case "create_scene": return commit(createScene(stateRef.current, command.arguments), "Agent");
+        case "create_character": return commit(createCharacter(stateRef.current, command.arguments), "Agent");
+        case "place_actor": return commit(placeActor(stateRef.current, command.arguments), "Agent");
+        case "direct_action": return direct(command.arguments, "Agent");
+        case "set_expression": return commit(setExpression(stateRef.current, command.arguments), "Agent");
+        case "play_scene": return play(command.arguments, "Agent");
+      }
+    };
+    const sync = async () => {
+      try {
+        await publishScene(getSceneSummary(stateRef.current));
+        const { commands } = await getBridgeCommands(cursor);
+        if (!active) return;
+        setBridgeStatus("ready");
+        for (const command of commands) {
+          const result = await executeCommand(command);
+          await completeBridgeCommand(command.id, result);
+          cursor = command.sequence;
+          await publishScene(getSceneSummary(stateRef.current));
+        }
+      } catch {
+        if (active) setBridgeStatus("unavailable");
+      } finally {
+        if (active) timer = window.setTimeout(() => void sync(), 350);
+      }
+    };
+    void sync();
+    return () => { active = false; if (timer) window.clearTimeout(timer); };
+  // The bridge's handlers intentionally read the mutable live SceneState, avoiding a reconnect after every animation frame.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [agentControl]);
+
   const addDirection = (direction: string, source: Activity["source"] = "You") => {
     const parsed = parseDirectionForScene(direction, stateRef.current);
     let next = stateRef.current;
@@ -135,13 +177,14 @@ export default function App() {
   };
 
   return <main className="app-shell">
-    <header className="topbar"><div><p className="eyebrow">A SHARED ANIMATED STAGE</p><h1>Direct a tiny live theater.</h1></div><div className={`agent-badge ${agentReady ? "ready" : ""}`}><span />{agentReady ? "Agent-ready" : "Human direction mode"}</div></header>
+    <header className="topbar"><div><p className="eyebrow">A SHARED ANIMATED STAGE</p><h1>Direct a tiny live theater.</h1></div><div className={`agent-badge ${agentReady || bridgeStatus === "ready" ? "ready" : ""}`}><span />{bridgeStatus === "ready" ? "Chat agent connected" : agentReady ? "Browser agent-ready" : "Human direction mode"}</div></header>
     <p className="intro">Type a stage direction, then watch Fenn and Nix bring it to life. In a WebMCP browser, your agent can co-direct the same scene.</p>
     <div className="workspace"><Stage scene={scene} activeBeat={activeBeat} />
       <aside className="control-panel"><section><div className="section-title"><span>01</span><h2>Cast & scene</h2></div><label className="scene-picker">Choose a scene<select value={scene.sceneId} onChange={(event) => selectScene(event.target.value)}><option value="neon_alley">Neon alley mystery</option><option value="hillside_quest">Hillside knight quest</option></select></label><div className="cast-list">{scene.actors.map((actor) => <div className="cast-card" key={actor.id}><div className={`avatar ${actor.preset === "robot" ? "avatar-robot" : actor.preset === "knight" ? "avatar-knight" : actor.preset === "dragon" ? "avatar-dragon" : "avatar-fox"}`}>{actor.preset === "robot" ? "◈" : actor.preset === "knight" ? "♜" : actor.preset === "dragon" ? "♛" : "▲"}</div><div><b>{actor.name}</b><small>{actor.visible ? actor.zone.replace("_", " ") : "offstage"}</small></div><select aria-label={`${actor.name} expression`} value={actor.expression} onChange={(event) => commit(setExpression(stateRef.current, { actorId: actor.id, expression: event.target.value }))}>{STAGE_EXPRESSIONS.map((expression) => <option key={expression}>{expression}</option>)}</select></div>)}</div><div className="placement-row">{scene.actors.map((actor) => <label key={actor.id}>{actor.name.split(" ").at(-1)}<select value={actor.zone} onChange={(event) => commit(placeActor(stateRef.current, { actorId: actor.id, zone: event.target.value }))}>{STAGE_ZONES.map((zone) => <option key={zone}>{zone}</option>)}</select></label>)}</div><button className="text-button" onClick={() => reset()}>↻ Reset this scene</button></section>
       <section><div className="section-title"><span>02</span><h2>Action queue <em>{scene.queue.filter((beat) => beat.status === "queued").length}</em></h2></div><div className="queue">{scene.queue.length ? scene.queue.map((beat, index) => <div className={`queue-item ${beat.status}`} key={beat.id}><span>{String(index + 1).padStart(2, "0")}</span><b>{scene.actors.find((actor) => actor.id === beat.actorId)?.name ?? beat.actorId}</b><i>→</i><strong>{beat.action}{beat.targetId ? ` · ${beat.targetId}` : beat.zone ? ` · ${beat.zone}` : ""}</strong></div>) : <p className="empty">Your directions will appear here for review.</p>}</div><div className="queue-actions"><button className="secondary" disabled={!scene.queue.length || scene.isPlaying} onClick={() => commit(clearQueue(stateRef.current))}>Clear</button><button className="primary" disabled={!scene.queue.length || scene.isPlaying} onClick={() => void play()}>{scene.isPlaying ? "Playing…" : "▶ Play scene"}</button></div></section></aside>
     </div>
 <section className="director"><div className="section-title"><span>03</span><h2>Direct the scene</h2></div><div className="examples">{currentExamples.map((example) => <button key={example} onClick={() => setPrompt(example)}>{example}</button>)}</div><div className="prompt-row"><textarea aria-label="Stage direction" value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder={scene.sceneId === "hillside_quest" ? "Sir Aurthor rides to the castle, holds the sword, then shoots at Ember." : "Nix enters from the right, walks to the crate, gasps, and hides."} /><button className={`mic ${listening ? "listening" : ""}`} onClick={listen} aria-label={listening ? "Stop listening" : "Speak a stage direction"}>{listening ? "■" : "◉"}</button><button className="primary direct-button" onClick={addParsedDirections}>Add to queue <span>→</span></button></div><label className="live-story"><input type="checkbox" checked={liveStory} onChange={(event) => { liveStoryRef.current = event.target.checked; setLiveStory(event.target.checked); }} /> Live story mode <small>Completed spoken sentences are visualized automatically.</small></label><p className="notice" role="status">{notice}</p></section>
+    <section className="agent-control"><div className="section-title"><span>04</span><h2>Agent Control</h2><em className={`bridge-status ${bridgeStatus}`}>{bridgeStatus === "ready" ? "Connected" : bridgeStatus === "connecting" ? "Connecting…" : bridgeStatus === "unavailable" ? "Bridge unavailable" : "Off"}</em></div><p>Allow a local Codex chat to inspect, queue, and play this visible scene through MCP.</p><label className="agent-toggle"><input type="checkbox" checked={agentControl} onChange={(event) => { setAgentControl(event.target.checked); setBridgeStatus(event.target.checked ? "connecting" : "off"); }} /> Enable local Agent Control</label>{agentControl && <small>Configure Codex to start the bridge, then ask it to call <code>get_scene_state</code>. This page applies every action and shows it in the activity log.</small>}<code className="bridge-command">Codex STDIO: node server/agent-bridge.mjs</code></section>
     <section className="activity"><div className="section-title"><span>LIVE</span><h2>Stage activity</h2></div>{activity.map((item) => <p key={item.id}><b className={item.source.toLowerCase()}>{item.source}</b>{item.text}</p>)}</section>
     <footer className="app-footer">Supported directions: {STAGE_ACTIONS.join(" · ")}</footer>
   </main>;

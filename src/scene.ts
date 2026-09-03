@@ -74,7 +74,7 @@ export function createScene(_state: SceneState, input: { sceneId?: unknown } = {
 
 export function createCharacter(state: SceneState, input: { preset?: unknown; name?: unknown; palette?: unknown } = {}): SceneCommand<StageActor> {
   if (typeof input.name !== "string" || !input.name.trim() || input.name.trim().length > 32) return failed(state, "Character name must be between 1 and 32 characters.");
-  if (typeof input.preset !== "string" || !(STAGE_PRESETS as readonly string[]).includes(input.preset)) return failed(state, "Preset must be fox_detective or robot.");
+  if (typeof input.preset !== "string" || !(STAGE_PRESETS as readonly string[]).includes(input.preset)) return failed(state, `Preset must be one of: ${STAGE_PRESETS.join(", ")}.`);
   const baseId = slug(input.name);
   let id = baseId;
   let suffix = 2;
