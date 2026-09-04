@@ -41,3 +41,5 @@
 
 .actor-slot::before { left: 25px; transform: rotate(-1.5deg); }
 .actor-slot::after { right: 24px; transform: rotate(1.5deg); }
+
+.hillside-stage .castle-art { left: 10%; bottom: 24%; }

@@ -106,6 +106,13 @@ const ZONE_ALIASES: Array<{ zone: StageZone; aliases: string[] }> = [
 ];
 
 const ACTION_RULES: Array<{ action: StageAction; patterns: RegExp[] }> = [
+  { action: "crash", patterns: [/\bcrash(?:es|ed|ing)?\b/, /\bsmash(?:es|ed|ing)?\b/] },
+  { action: "gallop", patterns: [/\bgallop(?:s|ed|ing)?\b/, /\bhorse\s+(?:ride|rides|riding|hooves?)\b/] },
+  { action: "arrow_shot", patterns: [/\barrow\s+(?:shot|shooting|flies|flying)\b/, /\btwang(?:s|ed|ing)?\b/] },
+  { action: "sword_clash", patterns: [/\bswords?\s+(?:clash|clashes|clashed|clashing|fight|fighting)\b/, /\bblade\s+clash(?:es|ed|ing)?\b/] },
+  { action: "yell", patterns: [/\byell(?:s|ed|ing)?\b/, /\bshout(?:s|ed|ing)?\b/, /\bscream(?:s|ed|ing)?\b/] },
+  { action: "murmur", patterns: [/\bmurmur(?:s|ed|ing)?\b/, /\bcrowd\s+(?:talks?|talking|chatter)\b/, /\bbackground\s+talking\b/] },
+  { action: "cheer", patterns: [/\bcheer(?:s|ed|ing)?\b/, /\bapplau(?:se|des|ding)\b/] },
   { action: "enter", patterns: [/\benter(?:s|ed|ing)?\b/, /\bcome(?:s| in| into)?\b/, /\barriv(?:e|es|ed|ing)\b/, /\bstep(?:s|ped|ping)?\s+on\b/] },
   { action: "walk", patterns: [/\bwalk(?:s|ed|ing)?\b/, /\bgo(?:es|ing)?\b/] },
   { action: "move", patterns: [/\b(?:move|moves|moved|moving)\b/] },

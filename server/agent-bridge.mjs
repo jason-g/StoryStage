@@ -1,15 +1,27 @@
 #!/usr/bin/env node
 import http from "node:http";
+import { fileURLToPath } from "node:url";
+
+try {
+  process.loadEnvFile(fileURLToPath(new URL("../.env", import.meta.url)));
+} catch (error) {
+  if (error?.code !== "ENOENT") throw error;
+}
 
 const PORT = Number(process.env.STORYSTAGE_BRIDGE_PORT ?? 4175);
 const LOOPBACK_HOST = "127.0.0.1";
-const allowedOrigins = new Set(["http://127.0.0.1:4174", "http://localhost:4174", "http://127.0.0.1:5173", "http://localhost:5173"]);
+const configuredOrigins = process.env.STORYSTAGE_ALLOWED_ORIGINS;
+if (!configuredOrigins) throw new Error("Set STORYSTAGE_ALLOWED_ORIGINS in .env or the bridge process environment.");
+const allowedOrigins = new Set(configuredOrigins.split(",").map((origin) => new URL(origin.trim()).origin));
+const actionProperties = { actorId: { type: "string" }, action: { type: "string" }, soundEffect: { type: "string", enum: ["crash", "gallop", "arrow_shot", "sword_clash", "yell", "murmur", "cheer"] }, targetId: { type: "string" }, zone: { type: "string" }, dialogue: { type: "string", maxLength: 140 } };
 const tools = [
   { name: "get_scene_state", description: "Read the live StoryStage scene, actors, props, and queued beats.", inputSchema: { type: "object", properties: {}, additionalProperties: false } },
+  { name: "begin_reasoning", description: "Show that the agent is planning new stage actions. Call this before plan_actions with a short goal, not private chain-of-thought.", inputSchema: { type: "object", properties: { goal: { type: "string", minLength: 1, maxLength: 160 } }, required: ["goal"], additionalProperties: false } },
+  { name: "plan_actions", description: "Submit a concise planning summary and generated actions. The complete plan is validated before it is added to the queue.", inputSchema: { type: "object", properties: { summary: { type: "string", minLength: 1, maxLength: 240 }, actions: { type: "array", minItems: 1, maxItems: 12, items: { type: "object", properties: actionProperties, required: ["actorId", "action"], additionalProperties: false } } }, required: ["summary", "actions"], additionalProperties: false } },
   { name: "create_scene", description: "Start the neon alley mystery or hillside knight quest.", inputSchema: { type: "object", properties: { sceneId: { type: "string", enum: ["neon_alley", "hillside_quest"] } }, required: ["sceneId"], additionalProperties: false } },
   { name: "create_character", description: "Add a supported character to the current StoryStage scene.", inputSchema: { type: "object", properties: { preset: { type: "string", enum: ["fox_detective", "robot", "knight", "dragon"] }, name: { type: "string", minLength: 1, maxLength: 32 }, palette: { type: "string" } }, required: ["preset", "name"], additionalProperties: false } },
   { name: "place_actor", description: "Place an actor in a named stage zone.", inputSchema: { type: "object", properties: { actorId: { type: "string" }, zone: { type: "string" } }, required: ["actorId", "zone"], additionalProperties: false } },
-  { name: "direct_action", description: "Queue one atomic StoryStage action. Call get_scene_state first. Use hold with an object targetId for hold, carry, pick up, take, or grab; it attaches the object to the actor until drop.", inputSchema: { type: "object", properties: { actorId: { type: "string" }, action: { type: "string" }, targetId: { type: "string" }, zone: { type: "string" }, dialogue: { type: "string", maxLength: 140 } }, required: ["actorId", "action"], additionalProperties: false } },
+  { name: "direct_action", description: "Queue one atomic StoryStage action. Optionally attach soundEffect so it plays when the action begins. Call get_scene_state first. Use hold with an object targetId for hold, carry, pick up, take, or grab; it attaches the object to the actor until drop.", inputSchema: { type: "object", properties: actionProperties, required: ["actorId", "action"], additionalProperties: false } },
   { name: "set_expression", description: "Set an actor's supported expression.", inputSchema: { type: "object", properties: { actorId: { type: "string" }, expression: { type: "string" } }, required: ["actorId", "expression"], additionalProperties: false } },
   { name: "play_scene", description: "Play queued StoryStage beats in sequence.", inputSchema: { type: "object", properties: { beatIds: { type: "array", items: { type: "string" } } }, additionalProperties: false } },
 ];
@@ -131,7 +143,7 @@ process.stdin.on("data", async (chunk) => {
     try { request = JSON.parse(line); } catch { continue; }
     if (!Object.prototype.hasOwnProperty.call(request, "id")) continue;
     if (request.method === "initialize") {
-      send({ jsonrpc: "2.0", id: request.id, result: { protocolVersion: request.params?.protocolVersion ?? "2025-03-26", capabilities: { tools: {} }, serverInfo: { name: "storystage-local", version: "1.0.0" }, instructions: "This controls a visible local StoryStage. Read get_scene_state before acting. Queue atomic directions with direct_action, then call play_scene. The user can see every action and may redirect the scene." } });
+      send({ jsonrpc: "2.0", id: request.id, result: { protocolVersion: request.params?.protocolVersion ?? "2025-03-26", capabilities: { tools: {} }, serverInfo: { name: "storystage-local", version: "1.0.0" }, instructions: "This controls a visible local StoryStage. Read get_scene_state before acting. Before generating a sequence, call begin_reasoning with a short goal, then call plan_actions with a concise summary and the generated actions. Use direct_action for one action and play_scene when ready. Do not provide private chain-of-thought. The user can see every action and may redirect the scene." } });
       continue;
     }
     if (request.method === "tools/list") {

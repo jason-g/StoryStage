@@ -1,0 +1,10 @@
+.sound-palette { margin: 10px 0 12px; padding: 11px; border: 1px solid #393654; border-radius: 11px; background: #121326; }
+.sound-palette header { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
+.sound-palette b { font-size: .78rem; }
+.sound-palette small { color: #8f8da9; font-size: .68rem; }
+.sound-buttons { display: flex; flex-wrap: wrap; gap: 6px; }
+.sound-buttons button { padding: 7px 9px; border: 1px solid #454163; border-radius: 8px; background: #24223b; color: #d9d7e9; cursor: pointer; font-size: .72rem; }
+.sound-buttons button:hover { border-color: #81e9ff; color: #fff; }
+.sound-buttons button:disabled { cursor: not-allowed; opacity: .4; }
+.queue-item.sound-beat { border-left-color: #f2bb5e; }
+.queue-item.sound-beat strong { color: #ffd98c; }

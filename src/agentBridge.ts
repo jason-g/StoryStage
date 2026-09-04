@@ -1,7 +1,7 @@
 export type AgentBridgeCommand = {
   id: number;
   sequence: number;
-  name: "create_scene" | "create_character" | "place_actor" | "direct_action" | "set_expression" | "play_scene";
+  name: "begin_reasoning" | "plan_actions" | "create_scene" | "create_character" | "place_actor" | "direct_action" | "set_expression" | "play_scene";
   arguments: Record<string, unknown>;
 };
 

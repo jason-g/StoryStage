@@ -20,9 +20,19 @@ export const STAGE_ACTIONS = [
   "attack",
   "explode",
   "die",
+  "crash",
+  "gallop",
+  "arrow_shot",
+  "sword_clash",
+  "yell",
+  "murmur",
+  "cheer",
 ] as const;
 
+export const SOUND_ACTIONS = ["crash", "gallop", "arrow_shot", "sword_clash", "yell", "murmur", "cheer"] as const;
+
 export type StageAction = (typeof STAGE_ACTIONS)[number];
+export type StageSound = (typeof SOUND_ACTIONS)[number];
 
 export const STAGE_ZONES = [
   "offstage_left",
@@ -86,6 +96,7 @@ export type StageBeat = {
   targetId?: string;
   zone?: StageZone;
   dialogue?: string;
+  soundEffect?: StageSound;
   status: "queued" | "playing" | "complete" | "failed";
 };
 
@@ -171,7 +182,7 @@ export type PlaybackOptions = {
   actionDurations?: Partial<Record<StageAction, number>>;
 };
 
-export type BeatInput = Pick<StageBeat, "id" | "actorId" | "action" | "targetId" | "zone" | "dialogue">;
+export type BeatInput = Pick<StageBeat, "id" | "actorId" | "action" | "targetId" | "zone" | "dialogue" | "soundEffect">;
 
 export type ValidationResult = {
   valid: boolean;
@@ -203,6 +214,13 @@ const DEFAULT_ACTION_DURATIONS: Record<StageAction, number> = {
   attack: 850,
   explode: 1100,
   die: 1200,
+  crash: 900,
+  gallop: 1800,
+  arrow_shot: 900,
+  sword_clash: 1300,
+  yell: 1200,
+  murmur: 1800,
+  cheer: 1800,
 };
 
 const SIDE_BY_ZONE: Partial<Record<StageZone, "left" | "right">> = {
@@ -388,6 +406,14 @@ function buildBeatOutcome(beat: BeatInput, actor: StageActor, before: StageActor
       return { outcome: `${after.name} explodes`, effects };
     case "die":
       return { outcome: `${after.name} dies`, effects };
+    case "crash":
+    case "gallop":
+    case "arrow_shot":
+    case "sword_clash":
+    case "yell":
+    case "murmur":
+    case "cheer":
+      return { outcome: `Sound effect: ${beat.action.replace("_", " ")}`, effects };
     default:
       return {
         outcome: `${after.name} performs ${beat.action}`,

@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import Stage from "./Stage";
 import { parseDirectionForScene } from "./parser";
-import { buildPlaybackPlan, STAGE_ACTIONS, STAGE_EXPRESSIONS, STAGE_ZONES, type SceneState } from "./playback";
+import { buildPlaybackPlan, SOUND_ACTIONS, STAGE_ACTIONS, STAGE_EXPRESSIONS, STAGE_ZONES, type SceneState, type StageAction } from "./playback";
+import { isSoundAction, playQueuedSound } from "./sound";
 import { clearQueue, createCharacter, createHillsideQuestScene, createScene, getSceneSummary, placeActor, queueAction, setExpression, updateBeatStatus, type SceneCommand } from "./scene";
 import { registerStoryStageTools } from "./webmcp";
 import { completeBridgeCommand, getBridgeCommands, publishScene, type AgentBridgeCommand } from "./agentBridge";
@@ -9,11 +10,15 @@ import "./ui.css";
 import "./scene-ui.css";
 import "./voice.css";
 import "./replay.css";
+import "./tutorial.css";
+import "./sound.css";
 
 type Activity = { id: number; text: string; source: "You" | "Agent" | "Stage" };
+type AgentReasoning = { status: "idle" | "thinking" | "queued" | "error"; text: string; actionCount: number };
 type SpeechAlternative = { transcript: string; confidence?: number };
 type SpeechResult = ArrayLike<SpeechAlternative> & { isFinal: boolean };
-type SpeechSession = { lang: string; continuous: boolean; interimResults: boolean; maxAlternatives?: number; phrases?: unknown[]; start(): void; stop(): void; onresult: (event: { resultIndex: number; results: ArrayLike<SpeechResult> }) => void; onend: () => void; onerror: () => void };
+type SpeechRecognitionError = { error?: string; message?: string };
+type SpeechSession = { lang: string; continuous: boolean; interimResults: boolean; start(): void; stop(): void; onresult: (event: { resultIndex: number; results: ArrayLike<SpeechResult> }) => void; onend: () => void; onerror: (event: SpeechRecognitionError) => void };
 type SpeechFactory = new () => SpeechSession;
 const examples = ["Nix enters from the right, walks to the crate, gasps, and hides.", "Fenn points at the clue and says ‘I found it!’", "Fenn laughs, then Nix exits right."];
 const questSuggestionSteps = [
@@ -36,6 +41,21 @@ const questSuggestionSteps = [
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 const MOVEMENT_PLAYBACK_RATE = 0.25;
 const movementActions = new Set(["enter", "walk", "move", "run", "hide", "exit", "ride", "fly", "fall"]);
+const SAVED_QUEUE_KEY = "storystage.savedQueue.v1";
+const TUTORIAL_SEEN_KEY = "storystage.tutorialSeen.v1";
+const tutorialSteps = [
+  { title: "Set the cast and scene", body: "The highlighted Scene controls choose the stage, expressions, and starting positions. Reset restores the opening arrangement whenever you want a fresh take." },
+  { title: "Arrange the action queue", body: "The highlighted queue is your scene timeline. Use ↑ and ↓ to reorder beats, ↻ to replay from one beat onward, Save and Load to keep a version, and Play scene when the order feels right." },
+  { title: "Add a stage direction", body: "Use one of the three suggestions, type into the highlighted direction box, or select the microphone and speak naturally. Add to queue turns the direction into playable beats." },
+  { title: "Connect an agent harness", body: "If the header says Browser agent-ready, the in-browser agent is already connected and no toggle is needed. To control this page from an external Codex, OpenCode, or Pi harness, configure the local stdio bridge below, turn on Connect external harness, and keep this page open.", code: 'node C:/path/to/vistell/server/agent-bridge.mjs' },
+];
+const tutorialTargets = [
+  ".control-panel section:first-child",
+  ".control-panel section:nth-child(2)",
+  ".director",
+  ".agent-control",
+];
+const soundLabels: Record<(typeof SOUND_ACTIONS)[number], string> = { crash: "💥 Crash", gallop: "🐎 Horse riding", arrow_shot: "➤ Arrow shot", sword_clash: "⚔ Sword fight", yell: "📣 Yelling", murmur: "🗣 Talking", cheer: "👏 Cheering" };
 
 export default function App() {
   const [scene, setScene] = useState<SceneState>(createHillsideQuestScene);
@@ -46,8 +66,13 @@ export default function App() {
   const [agentReady, setAgentReady] = useState(false);
   const [agentControl, setAgentControl] = useState(false);
   const [bridgeStatus, setBridgeStatus] = useState<"off" | "connecting" | "ready" | "unavailable">("off");
+  const [agentReasoning, setAgentReasoning] = useState<AgentReasoning>({ status: "idle", text: "Waiting for an agent to inspect the scene.", actionCount: 0 });
+  const [bridgeRetry, setBridgeRetry] = useState(0);
   const [listening, setListening] = useState(false);
   const [liveStory, setLiveStory] = useState(true);
+  const [tutorialStep, setTutorialStep] = useState<number | null>(() => {
+    try { return localStorage.getItem(TUTORIAL_SEEN_KEY) ? null : 0; } catch { return 0; }
+  });
   const stateRef = useRef(scene);
   const toolRegistered = useRef(false);
   const recognitionRef = useRef<SpeechSession | null>(null);
@@ -78,6 +103,49 @@ export default function App() {
     if (stateRef.current.queue.length === 0) rememberReplayOrigin(stateRef.current);
     return commit(queueAction(stateRef.current, input), source);
   };
+  const beginAgentReasoning = (input: Record<string, unknown>) => {
+    const goal = typeof input.goal === "string" ? input.goal.trim().slice(0, 160) : "";
+    if (!goal) return { ok: false, error: "A short planning goal is required.", summary: getSceneSummary(stateRef.current) };
+    setAgentReasoning({ status: "thinking", text: goal, actionCount: 0 });
+    return { ok: true, result: { status: "thinking", goal }, summary: getSceneSummary(stateRef.current) };
+  };
+  const queueAgentPlan = (input: Record<string, unknown>) => {
+    const summary = typeof input.summary === "string" ? input.summary.trim().slice(0, 240) : "";
+    const actions = Array.isArray(input.actions) ? input.actions.slice(0, 12) : [];
+    if (!summary || !actions.length) {
+      const error = "A planning summary and at least one action are required.";
+      setAgentReasoning({ status: "error", text: error, actionCount: 0 });
+      return { ok: false, error, summary: getSceneSummary(stateRef.current) };
+    }
+    let next = stateRef.current;
+    for (const action of actions) {
+      if (!action || typeof action !== "object" || Array.isArray(action)) {
+        const error = "Every planned action must be an object.";
+        setAgentReasoning({ status: "error", text: error, actionCount: 0 });
+        return { ok: false, error, summary: getSceneSummary(stateRef.current) };
+      }
+      const queued = queueAction(next, action as Record<string, unknown>);
+      if (!queued.ok) {
+        setAgentReasoning({ status: "error", text: queued.error, actionCount: 0 });
+        return { ok: false, error: queued.error, summary: getSceneSummary(stateRef.current) };
+      }
+      next = queued.state;
+    }
+    if (stateRef.current.queue.length === 0) rememberReplayOrigin(stateRef.current);
+    stateRef.current = next;
+    setScene(next);
+    const text = `Agent generated ${actions.length} new action${actions.length === 1 ? "" : "s"}.`;
+    setNotice(text);
+    setActivity((items) => [{ id: Date.now(), source: "Agent" as const, text }, ...items].slice(0, 7));
+    setAgentReasoning({ status: "queued", text: summary, actionCount: actions.length });
+    return { ok: true, result: { added: actions.length }, summary: getSceneSummary(next) };
+  };
+  const addSound = (action: StageAction) => {
+    if (!isSoundAction(action)) return;
+    const actorId = stateRef.current.actors.find((actor) => actor.visible)?.id ?? stateRef.current.actors[0]?.id;
+    if (!actorId) { setNotice("Add a character before adding a sound effect."); return; }
+    direct({ actorId, action });
+  };
   const reset = (source: Activity["source"] = "You") => {
     const command = createScene(stateRef.current, { sceneId: stateRef.current.sceneId });
     if (command.ok) rememberReplayOrigin(command.state);
@@ -90,6 +158,69 @@ export default function App() {
   };
   const questSuggestionStep = Math.min(Math.floor(scene.queue.length / 3), questSuggestionSteps.length - 1);
   const currentExamples = scene.sceneId === "hillside_quest" ? questSuggestionSteps[questSuggestionStep] : examples;
+
+  const reorderQueue = (index: number, offset: -1 | 1) => {
+    const target = index + offset;
+    if (scene.isPlaying || target < 0 || target >= stateRef.current.queue.length) return;
+    const queue = stateRef.current.queue.map((beat) => ({ ...beat, status: "queued" as const }));
+    [queue[index], queue[target]] = [queue[target], queue[index]];
+    const next = { ...stateRef.current, queue };
+    stateRef.current = next;
+    setScene(next);
+    setNotice(`Moved beat ${index + 1} ${offset < 0 ? "up" : "down"}.`);
+  };
+
+  const attachSound = (index: number, soundEffect: string) => {
+    if (scene.isPlaying || !stateRef.current.queue[index]) return;
+    const queue = stateRef.current.queue.map((beat, beatIndex) => beatIndex === index
+      ? { ...beat, soundEffect: soundEffect ? soundEffect as (typeof SOUND_ACTIONS)[number] : undefined }
+      : { ...beat });
+    const next = { ...stateRef.current, queue };
+    stateRef.current = next;
+    setScene(next);
+    setNotice(soundEffect ? `Attached ${soundEffect.replace("_", " ")} to beat ${index + 1}.` : `Removed the sound from beat ${index + 1}.`);
+  };
+
+  const saveQueue = () => {
+    if (!stateRef.current.queue.length) { setNotice("Add at least one action before saving."); return; }
+    try {
+      const beats = stateRef.current.queue.map(({ actorId, action, targetId, zone, dialogue, soundEffect }) => ({ actorId, action, targetId, zone, dialogue, soundEffect }));
+      localStorage.setItem(SAVED_QUEUE_KEY, JSON.stringify({ sceneId: stateRef.current.sceneId, beats }));
+      setNotice(`Saved ${beats.length} action${beats.length === 1 ? "" : "s"} in this browser.`);
+    } catch { setNotice("This browser could not save the queue."); }
+  };
+
+  const loadQueue = () => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(SAVED_QUEUE_KEY) ?? "null") as { sceneId?: string; beats?: Array<Record<string, unknown>> } | null;
+      if (!saved?.beats?.length || (saved.sceneId !== "neon_alley" && saved.sceneId !== "hillside_quest")) { setNotice("No saved action queue was found in this browser."); return; }
+      const fresh = createScene(stateRef.current, { sceneId: saved.sceneId });
+      if (!fresh.ok) { setNotice(fresh.error); return; }
+      let next = fresh.state;
+      for (const beat of saved.beats) {
+        const queued = queueAction(next, beat);
+        if (!queued.ok) { setNotice(`The saved queue could not be loaded: ${queued.error}`); return; }
+        next = queued.state;
+      }
+      rememberReplayOrigin(fresh.state);
+      stateRef.current = next;
+      setScene(next);
+      setNotice(`Loaded ${next.queue.length} saved action${next.queue.length === 1 ? "" : "s"}.`);
+    } catch { setNotice("The saved queue is damaged or unavailable."); }
+  };
+
+  const closeTutorial = () => {
+    try { localStorage.setItem(TUTORIAL_SEEN_KEY, "done"); } catch { /* Tutorial still closes when storage is unavailable. */ }
+    setTutorialStep(null);
+  };
+
+  useEffect(() => {
+    if (tutorialStep === null) return;
+    const timer = window.setTimeout(() => {
+      document.querySelector(tutorialTargets[tutorialStep])?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 80);
+    return () => window.clearTimeout(timer);
+  }, [tutorialStep]);
 
   const play = async (input: Record<string, unknown> = {}, source: Activity["source"] = "You") => {
     const ids = Array.isArray(input.beatIds) ? new Set(input.beatIds.filter((id): id is string => typeof id === "string")) : null;
@@ -113,6 +244,8 @@ export default function App() {
         movement ? planBeat.nextPropsState : null,
       );
       stateRef.current = begin; setScene(begin); setActiveBeat({ ...liveBeat, status: "playing" });
+      playQueuedSound(planBeat.action);
+      if (liveBeat.soundEffect && liveBeat.soundEffect !== planBeat.action) playQueuedSound(liveBeat.soundEffect);
       await wait(movement ? planBeat.timing.durationMs / MOVEMENT_PLAYBACK_RATE : Math.min(planBeat.timing.durationMs, 1150));
       const complete = updateBeatStatus(
         stateRef.current,
@@ -135,7 +268,7 @@ export default function App() {
     const queue = stateRef.current.queue.map((beat, index) => ({ ...beat, status: index < startIndex ? "complete" as const : "queued" as const }));
     if (!queue[startIndex] || stateRef.current.isPlaying) return;
 
-    let rebuilt: SceneState = {
+    const rebuilt: SceneState = {
       ...replayOriginRef.current,
       actors: replayOriginRef.current.actors.map((actor) => ({ ...actor })),
       props: replayOriginRef.current.props.map((prop) => ({ ...prop })),
@@ -163,6 +296,8 @@ export default function App() {
     toolRegistered.current = true;
     setAgentReady(registerStoryStageTools({
       getSceneState: () => getSceneSummary(stateRef.current),
+      beginReasoning: beginAgentReasoning,
+      planActions: queueAgentPlan,
       createCharacter: (input) => commit(createCharacter(stateRef.current, input), "Agent"),
       createScene: (input) => {
         const command = createScene(stateRef.current, input);
@@ -193,6 +328,8 @@ export default function App() {
     };
     const executeCommand = async (command: AgentBridgeCommand) => {
       switch (command.name) {
+        case "begin_reasoning": return beginAgentReasoning(command.arguments);
+        case "plan_actions": return queueAgentPlan(command.arguments);
         case "create_scene": {
           const sceneCommand = createScene(stateRef.current, command.arguments);
           if (sceneCommand.ok) rememberReplayOrigin(sceneCommand.state);
@@ -232,7 +369,7 @@ export default function App() {
     return () => { active = false; controller.abort(); };
   // The bridge's handlers intentionally read the mutable live SceneState, avoiding a reconnect after every animation frame.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [agentControl]);
+  }, [agentControl, bridgeRetry]);
 
   const addDirection = (direction: string, source: Activity["source"] = "You") => {
     const parsed = parseDirectionForScene(direction, stateRef.current);
@@ -277,15 +414,6 @@ export default function App() {
     recognition.lang = "en-US";
     recognition.continuous = true;
     recognition.interimResults = true;
-    recognition.maxAlternatives = 5;
-    const Phrase = (window as unknown as { SpeechRecognitionPhrase?: new (phrase: string, boost: number) => unknown }).SpeechRecognitionPhrase;
-    if (Phrase && "phrases" in recognition) {
-      recognition.phrases = [
-        ...stateRef.current.actors.flatMap((actor) => [actor.name, actor.id]),
-        ...stateRef.current.props.map((prop) => prop.id),
-        ...STAGE_ACTIONS,
-      ].map((phrase) => new Phrase(phrase, 7));
-    }
     recognition.onresult = (event) => {
       let spoken = "";
       let completed = "";
@@ -302,21 +430,46 @@ export default function App() {
       }
     };
     recognition.onend = () => { recognitionRef.current = null; setListening(false); };
-    recognition.onerror = () => { recognitionRef.current = null; setListening(false); setNotice("Voice input was unavailable. Try typing your direction."); };
+    recognition.onerror = (event) => {
+      recognitionRef.current = null;
+      setListening(false);
+      const reason = event.error === "not-allowed" || event.error === "service-not-allowed"
+        ? "Microphone access was blocked. Allow microphone access in the browser, then try again."
+        : event.error === "audio-capture"
+          ? "No working microphone was found. Check your input device, then try again."
+          : event.error === "network"
+            ? "The browser speech service could not be reached. Check the connection and try again."
+            : `Voice input stopped${event.error ? ` (${event.error})` : ""}. Try again.`;
+      setNotice(reason);
+    };
     setListening(true);
     recognition.start();
   };
 
-  return <main className="app-shell">
-    <header className="topbar"><div><p className="eyebrow">A SHARED ANIMATED STAGE</p><h1>Direct a tiny live theater.</h1></div><div className={`agent-badge ${agentReady || bridgeStatus === "ready" ? "ready" : ""}`}><span />{bridgeStatus === "ready" ? "Chat agent connected" : agentReady ? "Browser agent-ready" : "Human direction mode"}</div></header>
+  return <main className={`app-shell ${tutorialStep === null ? "" : `tutorial-active tutorial-step-${tutorialStep}`}`}>
+    <header className="topbar"><div><p className="eyebrow">A SHARED ANIMATED STAGE</p><h1>Direct a tiny live theater.</h1></div><div className="topbar-actions"><button className="tutorial-launch" onClick={() => setTutorialStep(0)}>How to use</button><div className={`agent-badge ${agentReady || bridgeStatus === "ready" ? "ready" : ""}`}><span />{bridgeStatus === "ready" ? "Chat agent connected" : agentReady ? "Browser agent-ready" : "Human direction mode"}</div></div></header>
     <p className="intro">Type a stage direction, then watch Fenn and Nix bring it to life. In a WebMCP browser, your agent can co-direct the same scene.</p>
     <div className="workspace"><Stage scene={scene} activeBeat={activeBeat} />
       <aside className="control-panel"><section><div className="section-title"><span>01</span><h2>Cast & scene</h2></div><label className="scene-picker">Choose a scene<select value={scene.sceneId} onChange={(event) => selectScene(event.target.value)}><option value="neon_alley">Neon alley mystery</option><option value="hillside_quest">Hillside knight quest</option></select></label><div className="cast-list">{scene.actors.map((actor) => <div className="cast-card" key={actor.id}><div className={`avatar ${actor.preset === "robot" ? "avatar-robot" : actor.preset === "knight" ? "avatar-knight" : actor.preset === "dragon" ? "avatar-dragon" : "avatar-fox"}`}>{actor.preset === "robot" ? "◈" : actor.preset === "knight" ? "♜" : actor.preset === "dragon" ? "♛" : "▲"}</div><div><b>{actor.name}</b><small>{actor.visible ? actor.zone.replace("_", " ") : "offstage"}</small></div><select aria-label={`${actor.name} expression`} value={actor.expression} onChange={(event) => commit(setExpression(stateRef.current, { actorId: actor.id, expression: event.target.value }))}>{STAGE_EXPRESSIONS.map((expression) => <option key={expression}>{expression}</option>)}</select></div>)}</div><div className="placement-row">{scene.actors.map((actor) => <label key={actor.id}>{actor.name.split(" ").at(-1)}<select value={actor.zone} onChange={(event) => commit(placeActor(stateRef.current, { actorId: actor.id, zone: event.target.value }))}>{STAGE_ZONES.map((zone) => <option key={zone}>{zone}</option>)}</select></label>)}</div><button className="text-button" onClick={() => reset()}>↻ Reset this scene</button></section>
-      <section><div className="section-title"><span>02</span><h2>Action queue <em>{scene.queue.filter((beat) => beat.status === "queued").length}</em></h2></div><div className="queue">{scene.queue.length ? scene.queue.map((beat, index) => <div className={`queue-item ${beat.status}`} key={beat.id}><span>{String(index + 1).padStart(2, "0")}</span><b>{scene.actors.find((actor) => actor.id === beat.actorId)?.name ?? beat.actorId}</b><i>→</i><strong>{beat.action}{beat.targetId ? ` · ${beat.targetId}` : beat.zone ? ` · ${beat.zone}` : ""}</strong><button className="replay-beat" disabled={scene.isPlaying} onClick={() => void replayFrom(index)} aria-label={`Replay from beat ${index + 1}: ${beat.action}`} title="Replay from here">↻</button></div>) : <p className="empty">Your directions will appear here for review.</p>}</div><div className="queue-actions"><button className="secondary" disabled={!scene.queue.length || scene.isPlaying} onClick={() => { rememberReplayOrigin(stateRef.current); commit(clearQueue(stateRef.current)); }}>Clear</button><button className="primary" disabled={!scene.queue.length || scene.isPlaying} onClick={() => void play()}>{scene.isPlaying ? "Playing…" : "▶ Play scene"}</button></div></section></aside>
+      <section><div className="section-title"><span>02</span><h2>Action queue <em>{scene.queue.filter((beat) => beat.status === "queued").length}</em></h2></div><div className="queue">{scene.queue.length ? scene.queue.map((beat, index) => <div className={`queue-item ${beat.status}`} key={beat.id}><span>{String(index + 1).padStart(2, "0")}</span><b>{scene.actors.find((actor) => actor.id === beat.actorId)?.name ?? beat.actorId}</b><i>→</i><strong>{beat.action}{beat.targetId ? ` · ${beat.targetId}` : beat.zone ? ` · ${beat.zone}` : ""}<label className="beat-sound">Sound<select aria-label={`Sound for beat ${index + 1}`} disabled={scene.isPlaying} value={beat.soundEffect ?? ""} onChange={(event) => attachSound(index, event.target.value)}><option value="">None</option>{SOUND_ACTIONS.map((sound) => <option key={sound} value={sound}>{soundLabels[sound].replace(/^\S+\s/, "")}</option>)}</select></label></strong><div className="queue-tools"><span className="queue-reorder"><button disabled={scene.isPlaying || index === 0} onClick={() => reorderQueue(index, -1)} aria-label={`Move beat ${index + 1} up`}>↑</button><button disabled={scene.isPlaying || index === scene.queue.length - 1} onClick={() => reorderQueue(index, 1)} aria-label={`Move beat ${index + 1} down`}>↓</button></span><button className="replay-beat" disabled={scene.isPlaying} onClick={() => void replayFrom(index)} aria-label={`Replay from beat ${index + 1}: ${beat.action}`} title="Replay from here">↻</button></div></div>) : <p className="empty">Your directions will appear here for review.</p>}</div><div className="queue-storage"><button className="secondary" disabled={!scene.queue.length || scene.isPlaying} onClick={saveQueue}>Save</button><button className="secondary" disabled={scene.isPlaying} onClick={loadQueue}>Load</button></div><div className="queue-actions"><button className="secondary" disabled={!scene.queue.length || scene.isPlaying} onClick={() => { rememberReplayOrigin(stateRef.current); commit(clearQueue(stateRef.current)); }}>Clear</button><button className="primary" disabled={!scene.queue.length || scene.isPlaying} onClick={() => void play()}>{scene.isPlaying ? "Playing…" : "▶ Play scene"}</button></div></section></aside>
     </div>
+    <section className="sound-palette" aria-labelledby="sound-effects-title"><header><b id="sound-effects-title">Sound effects</b><small>Add sounds directly to the action queue</small></header><div className="sound-buttons">{SOUND_ACTIONS.map((action) => <button key={action} disabled={scene.isPlaying} onClick={() => addSound(action)}>{soundLabels[action]}</button>)}</div></section>
 <section className="director"><div className="section-title"><span>03</span><h2>Direct the scene</h2></div><div className="examples">{currentExamples.map((example) => <button key={example} onClick={() => setPrompt(example)}>{example}</button>)}</div><div className="prompt-row"><textarea aria-label="Stage direction" value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder={scene.sceneId === "hillside_quest" ? "Sir Arthur rides to the castle, holds the sword, then shoots at Ember." : "Nix enters from the right, walks to the crate, gasps, and hides."} /><button className={`mic ${listening ? "listening" : ""}`} onClick={listen} aria-label={listening ? "Stop listening" : "Speak a stage direction"}>{listening ? "■" : "◉"}</button><button className="primary direct-button" onClick={addParsedDirections}>Add to queue <span>→</span></button></div><label className="live-story"><input type="checkbox" checked={liveStory} onChange={(event) => { liveStoryRef.current = event.target.checked; setLiveStory(event.target.checked); }} /> Live story mode <small>Completed spoken sentences are visualized automatically.</small></label><p className="notice" role="status">{notice}</p></section>
-    <section className="agent-control"><div className="section-title"><span>04</span><h2>Agent Control</h2><em className={`bridge-status ${bridgeStatus}`}>{bridgeStatus === "ready" ? "Connected" : bridgeStatus === "connecting" ? "Connecting…" : bridgeStatus === "unavailable" ? "Bridge unavailable" : "Off"}</em></div><p>Allow a local Codex chat to inspect, queue, and play this visible scene through MCP.</p><label className="agent-toggle"><input type="checkbox" checked={agentControl} onChange={(event) => { setAgentControl(event.target.checked); setBridgeStatus(event.target.checked ? "connecting" : "off"); }} /> Enable local Agent Control</label>{agentControl && <small>Configure Codex to start the bridge, then ask it to call <code>get_scene_state</code>. This page applies every action and shows it in the activity log.</small>}<code className="bridge-command">Codex STDIO: node server/agent-bridge.mjs</code></section>
+    <section className="agent-control">
+      <div className="section-title"><span>04</span><h2>Agent Control</h2><em className={`bridge-status ${bridgeStatus === "off" && agentReady ? "ready" : bridgeStatus}`}>{bridgeStatus === "ready" ? "External harness connected" : bridgeStatus === "connecting" ? "Connecting…" : bridgeStatus === "unavailable" ? "Local bridge not running" : agentReady ? "Browser agent-ready" : "External harness off"}</em></div>
+      <p>{agentReady ? "This browser already exposes the scene to its built-in agent through WebMCP. The local bridge is optional." : "Connect an external Codex, OpenCode, or Pi harness so it can inspect, queue, and play this visible scene."}</p>
+      <div className={`agent-reasoning ${agentReasoning.status}`} role="status" aria-live="polite">
+        <span className="reasoning-loop" aria-hidden="true">↻</span>
+        <div><b>Agent reasoning</b><small>{agentReasoning.text}</small></div>
+        {agentReasoning.status === "queued" && <em>{agentReasoning.actionCount} queued</em>}
+      </div>
+      <label className="agent-toggle"><input type="checkbox" checked={agentControl} onChange={(event) => { setAgentControl(event.target.checked); setBridgeStatus(event.target.checked ? "connecting" : "off"); }} /> Connect external harness</label>
+      {agentControl && bridgeStatus === "unavailable" && <div className="bridge-help"><small>Start the configured stdio MCP bridge in your agent harness, then retry. {agentReady && "The browser’s built-in agent remains available."}</small><button className="secondary" onClick={() => { setBridgeStatus("connecting"); setBridgeRetry((retry) => retry + 1); }}>Retry connection</button></div>}
+      {agentControl && bridgeStatus !== "unavailable" && <small>Configure your harness to start the bridge, then ask it to call <code>get_scene_state</code>. This page applies every action and shows it in the activity log.</small>}
+      <code className="bridge-command">STDIO command: node C:/path/to/vistell/server/agent-bridge.mjs</code>
+    </section>
     <section className="activity"><div className="section-title"><span>LIVE</span><h2>Stage activity</h2></div>{activity.map((item) => <p key={item.id}><b className={item.source.toLowerCase()}>{item.source}</b>{item.text}</p>)}</section>
     <footer className="app-footer">Supported directions: {STAGE_ACTIONS.join(" · ")}</footer>
+    {tutorialStep !== null && <div className="tutorial-backdrop" role="presentation"><section className="tutorial-dialog" role="dialog" aria-modal="true" aria-labelledby="tutorial-title"><button className="tutorial-close" onClick={closeTutorial} aria-label="Close tutorial">×</button><p className="tutorial-count">Step {tutorialStep + 1} of {tutorialSteps.length}</p><h2 id="tutorial-title">{tutorialSteps[tutorialStep].title}</h2><p>{tutorialSteps[tutorialStep].body}</p>{tutorialSteps[tutorialStep].code && <><code>{tutorialSteps[tutorialStep].code}</code><small>Codex: add it as a local MCP server. OpenCode: place it in your MCP configuration. Pi: register it through your MCP extension or configuration. All three use the same stdio command.</small></>}<div className="tutorial-progress" aria-hidden="true">{tutorialSteps.map((_, index) => <i className={index === tutorialStep ? "active" : ""} key={index} />)}</div><div className="tutorial-actions"><button className="secondary" disabled={tutorialStep === 0} onClick={() => setTutorialStep((step) => step === null ? 0 : Math.max(0, step - 1))}>Back</button>{tutorialStep < tutorialSteps.length - 1 ? <button className="primary" onClick={() => setTutorialStep((step) => step === null ? 0 : step + 1)}>Next</button> : <button className="primary" onClick={closeTutorial}>Start directing</button>}</div></section></div>}
   </main>;
 }

@@ -1,0 +1,68 @@
+.topbar-actions { display: flex; align-items: center; gap: 10px; }
+.tutorial-launch { padding: 8px 11px; border: 1px solid #4e4a73; border-radius: 999px; background: #1b1a32; color: #d8d4ef; cursor: pointer; font-weight: 750; }
+.tutorial-launch:hover { border-color: #81e9ff; color: #fff; }
+
+.tutorial-backdrop { position: fixed; z-index: 50; inset: 0; display: grid; place-items: center; padding: 20px; background: #070711cc; backdrop-filter: blur(8px); }
+.tutorial-dialog { position: relative; width: min(540px, 100%); padding: 30px; border: 1px solid #555077; border-radius: 20px; background: linear-gradient(145deg, #211f3b, #111224); box-shadow: 0 28px 90px #000b; }
+.tutorial-dialog h2 { margin: 5px 0 12px; font-size: 1.55rem; }
+.tutorial-dialog > p:not(.tutorial-count) { color: #c7c4da; font-size: 1rem; line-height: 1.65; }
+.tutorial-dialog code { display: block; margin: 16px 0 9px; padding: 12px; overflow-x: auto; border: 1px solid #3b3858; border-radius: 9px; background: #0b0c19; color: #9deeff; font-size: .85rem; }
+.tutorial-dialog small { display: block; color: #aaa6c6; font-size: .82rem; line-height: 1.55; }
+.tutorial-count { margin: 0; color: #8d83dd; font-size: .75rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.tutorial-close { position: absolute; top: 14px; right: 16px; border: 0; background: transparent; color: #aaa6c6; cursor: pointer; font-size: 1.7rem; }
+.tutorial-progress { display: flex; gap: 7px; margin: 24px 0 15px; }
+.tutorial-progress i { width: 26px; height: 4px; border-radius: 3px; background: #45415f; }
+.tutorial-progress i.active { background: #79e7ff; }
+.tutorial-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.tutorial-actions button { min-width: 90px; }
+
+@media (max-width: 560px) {
+  .topbar-actions { width: 100%; justify-content: space-between; }
+  .tutorial-dialog { padding: 25px 20px 20px; }
+}
+
+/* Guided spotlight: the active controls remain visible while the rest of the app dims. */
+.tutorial-backdrop { display: block; background: transparent; pointer-events: none; backdrop-filter: none; }
+.tutorial-dialog { position: fixed; z-index: 2; left: 24px; bottom: 24px; width: min(440px, calc(100vw - 48px)); pointer-events: auto; }
+.tutorial-step-2 .tutorial-dialog { right: 24px; top: 24px; bottom: auto; left: auto; }
+.tutorial-step-3 .tutorial-dialog { top: 24px; bottom: auto; }
+
+.tutorial-step-0 .control-panel section:first-child,
+.tutorial-step-1 .control-panel section:nth-child(2),
+.tutorial-step-2 .director,
+.tutorial-step-3 .agent-control {
+  position: relative;
+  z-index: 50;
+  border-radius: 14px;
+  outline: 3px solid #7fe9ff;
+  outline-offset: 7px;
+  box-shadow: 0 0 0 9999px #070711d9, 0 0 34px #62dfffa8;
+}
+
+.tutorial-step-0 .control-panel section:first-child::after,
+.tutorial-step-1 .control-panel section:nth-child(2)::after,
+.tutorial-step-2 .director::after,
+.tutorial-step-3 .agent-control::after {
+  position: absolute;
+  z-index: 2;
+  top: -22px;
+  right: 8px;
+  padding: 5px 9px;
+  border-radius: 999px;
+  background: #79e7ff;
+  color: #101126;
+  font-size: .72rem;
+  font-weight: 900;
+  letter-spacing: .03em;
+}
+
+.tutorial-step-0 .control-panel section:first-child::after { content: "SCENE CONTROLS"; }
+.tutorial-step-1 .control-panel section:nth-child(2)::after { content: "ACTION QUEUE"; }
+.tutorial-step-2 .director::after { content: "DIRECTION CONTROLS"; }
+.tutorial-step-3 .agent-control::after { content: "AGENT CONTROL"; }
+
+@media (max-width: 700px) {
+  .tutorial-dialog,
+  .tutorial-step-2 .tutorial-dialog,
+  .tutorial-step-3 .tutorial-dialog { top: auto; right: 12px; bottom: 12px; left: 12px; width: auto; max-height: 48vh; overflow: auto; }
+}

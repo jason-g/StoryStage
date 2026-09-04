@@ -10,6 +10,7 @@ import {
   type StageActor,
   type StageExpression,
   type StagePreset,
+  type StageSound,
   type StageZone,
 } from "./playback";
 
@@ -54,6 +55,7 @@ const failed = (state: SceneState, error: string): SceneCommand<never> => ({ ok:
 const slug = (value: string) => value.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") || "actor";
 const validZone = (value: unknown): value is StageZone => typeof value === "string" && (STAGE_ZONES as readonly string[]).includes(value);
 const validAction = (value: unknown): value is StageAction => typeof value === "string" && (STAGE_ACTIONS as readonly string[]).includes(value);
+const validSound = (value: unknown): value is StageSound => typeof value === "string" && ["crash", "gallop", "arrow_shot", "sword_clash", "yell", "murmur", "cheer"].includes(value);
 const validExpression = (value: unknown): value is StageExpression => typeof value === "string" && (STAGE_EXPRESSIONS as readonly string[]).includes(value);
 
 export function getSceneSummary(state: SceneState) {
@@ -61,7 +63,7 @@ export function getSceneSummary(state: SceneState) {
     scene: state.sceneId,
     actors: state.actors.map(({ id, preset, name, palette, zone, expression, visible }) => ({ id, preset, name, palette, zone, expression, visible })),
     props: state.props.map(({ id, zone, visible, heldBy, kind }) => ({ id, zone, visible: visible !== false, heldBy, kind })),
-    queue: state.queue.map(({ id, actorId, action, targetId, zone, dialogue, status }) => ({ id, actor: actorId, action, targetId, zone, dialogue, status })),
+    queue: state.queue.map(({ id, actorId, action, targetId, zone, dialogue, soundEffect, status }) => ({ id, actor: actorId, action, targetId, zone, dialogue, soundEffect, status })),
     isPlaying: state.isPlaying,
   };
 }
@@ -112,8 +114,9 @@ export function queueAction(state: SceneState, input: Partial<BeatInput> = {}): 
   const actor = state.actors.find((candidate) => candidate.id === input.actorId);
   if (!actor) return failed(state, `Actor ${input.actorId} was not found.`);
   if (input.zone !== undefined && !validZone(input.zone)) return failed(state, "Choose a valid named stage zone.");
+  if (input.soundEffect !== undefined && !validSound(input.soundEffect)) return failed(state, "Choose a supported sound effect.");
   if (input.targetId !== undefined && !state.props.some((prop) => prop.id === input.targetId) && !state.actors.some((candidate) => candidate.id === input.targetId)) return failed(state, `Target ${input.targetId} was not found.`);
-  const beat = { id: `beat-${Date.now()}-${state.queue.length + 1}`, actorId: input.actorId, action: input.action, ...(input.zone ? { zone: input.zone } : {}), ...(input.targetId ? { targetId: input.targetId } : {}), ...(typeof input.dialogue === "string" ? { dialogue: input.dialogue.slice(0, 140) } : {}), status: "queued" as const };
+  const beat = { id: `beat-${Date.now()}-${state.queue.length + 1}`, actorId: input.actorId, action: input.action, ...(input.zone ? { zone: input.zone } : {}), ...(input.targetId ? { targetId: input.targetId } : {}), ...(typeof input.dialogue === "string" ? { dialogue: input.dialogue.slice(0, 140) } : {}), ...(input.soundEffect ? { soundEffect: input.soundEffect } : {}), status: "queued" as const };
   const plan = buildPlaybackPlan({ ...state, queue: [] }, [...state.queue, beat]);
   const latest = plan.beats.at(-1);
   if (!latest?.playable) return failed(state, latest?.issues.find((issue) => issue.severity === "error")?.message ?? "That action cannot be queued in the current scene.");
