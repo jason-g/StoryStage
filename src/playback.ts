@@ -1,6 +1,7 @@
 export const STAGE_ACTIONS = [
   "enter",
   "walk",
+  "move",
   "run",
   "point",
   "talk",
@@ -9,12 +10,16 @@ export const STAGE_ACTIONS = [
   "hide",
   "exit",
   "ride",
+  "jump",
   "hold",
+  "grab",
   "drop",
   "shoot",
   "fly",
   "fall",
   "attack",
+  "explode",
+  "die",
 ] as const;
 
 export type StageAction = (typeof STAGE_ACTIONS)[number];
@@ -179,6 +184,7 @@ const DEFAULT_BEAT_GAP_MS = 180;
 const DEFAULT_ACTION_DURATIONS: Record<StageAction, number> = {
   enter: 1150,
   walk: 1100,
+  move: 1100,
   run: 850,
   point: 500,
   talk: 1350,
@@ -187,12 +193,16 @@ const DEFAULT_ACTION_DURATIONS: Record<StageAction, number> = {
   hide: 900,
   exit: 1050,
   ride: 1250,
+  jump: 800,
   hold: 550,
+  grab: 650,
   drop: 600,
   shoot: 900,
   fly: 1200,
   fall: 1000,
   attack: 850,
+  explode: 1100,
+  die: 1200,
 };
 
 const SIDE_BY_ZONE: Partial<Record<StageZone, "left" | "right">> = {
@@ -319,6 +329,8 @@ function buildBeatOutcome(beat: BeatInput, actor: StageActor, before: StageActor
         outcome: locationLabel ? `${after.name} walks to ${locationLabel}` : `${after.name} walks`,
         effects,
       };
+    case "move":
+      return { outcome: locationLabel ? `${after.name} moves to ${locationLabel}` : `${after.name} moves`, effects };
     case "run":
       return {
         outcome: locationLabel ? `${after.name} runs to ${locationLabel}` : `${after.name} runs`,
@@ -356,8 +368,12 @@ function buildBeatOutcome(beat: BeatInput, actor: StageActor, before: StageActor
       };
     case "ride":
       return { outcome: locationLabel ? `${after.name} rides toward ${locationLabel}` : `${after.name} rides`, effects };
+    case "jump":
+      return { outcome: `${after.name} jumps`, effects };
     case "hold":
       return { outcome: targetLabel ? `${after.name} holds the ${targetLabel}` : `${after.name} holds an item`, effects };
+    case "grab":
+      return { outcome: targetLabel ? `${after.name} grabs the ${targetLabel}` : `${after.name} grabs an item`, effects };
     case "drop":
       return { outcome: targetLabel ? `${after.name} drops the ${targetLabel}` : `${after.name} drops an item`, effects };
     case "shoot":
@@ -368,6 +384,10 @@ function buildBeatOutcome(beat: BeatInput, actor: StageActor, before: StageActor
       return { outcome: locationLabel ? `${after.name} falls to ${locationLabel}` : `${after.name} falls`, effects };
     case "attack":
       return { outcome: targetLabel ? `${after.name} attacks ${targetLabel}` : `${after.name} attacks`, effects };
+    case "explode":
+      return { outcome: `${after.name} explodes`, effects };
+    case "die":
+      return { outcome: `${after.name} dies`, effects };
     default:
       return {
         outcome: `${after.name} performs ${beat.action}`,
@@ -421,7 +441,7 @@ export function validateBeat(beat: BeatInput, scene: SceneSnapshot): ValidationR
     }
   }
 
-  const needsPosition = beat.action === "walk" || beat.action === "run" || beat.action === "enter" || beat.action === "hide" || beat.action === "exit" || beat.action === "ride" || beat.action === "fly" || beat.action === "fall";
+  const needsPosition = beat.action === "walk" || beat.action === "move" || beat.action === "run" || beat.action === "enter" || beat.action === "hide" || beat.action === "exit" || beat.action === "ride" || beat.action === "fly" || beat.action === "fall";
   const resolvedZone = resolveDefaultTargetZone(actor, beat);
 
   if (needsPosition && !resolvedZone) {
@@ -467,11 +487,11 @@ export function validateBeat(beat: BeatInput, scene: SceneSnapshot): ValidationR
     });
   }
 
-  if ((beat.action === "hold" || beat.action === "drop" || beat.action === "shoot") && !beat.targetId) {
+  if ((beat.action === "hold" || beat.action === "grab" || beat.action === "drop" || beat.action === "shoot") && !beat.targetId) {
     issues.push({ code: "missing-item-target", severity: "error", message: `${beat.action} needs a target, such as sword, bow, or arrow.`, beatId: beat.id, actorId: beat.actorId });
   }
 
-  if (beat.action === "hold" && beat.targetId) {
+  if ((beat.action === "hold" || beat.action === "grab") && beat.targetId) {
     const heldProp = findProp(scene, beat.targetId);
     if (!heldProp || heldProp.kind === "scenery") {
       issues.push({ code: "invalid-held-target", severity: "error", message: `${actor.name} can hold or carry a movable object, not ${formatTargetLabel(scene, beat.targetId)}.`, beatId: beat.id, actorId: beat.actorId });
@@ -541,6 +561,7 @@ export function simulateBeat(scene: SceneSnapshot, beat: BeatInput): {
       after.zone = normalizedBeat.zone ?? resolveDefaultTargetZone(actor, normalizedBeat);
       break;
     case "walk":
+    case "move":
     case "run":
       after.visible = true;
       after.zone = normalizedBeat.zone ?? actor.zone;
@@ -574,7 +595,12 @@ export function simulateBeat(scene: SceneSnapshot, beat: BeatInput): {
       after.zone = normalizedBeat.zone ?? actor.zone;
       after.expression = "happy";
       break;
+    case "jump":
+      after.visible = true;
+      after.expression = "happy";
+      break;
     case "hold":
+    case "grab":
       after.visible = true;
       after.expression = "suspicious";
       break;
@@ -599,15 +625,23 @@ export function simulateBeat(scene: SceneSnapshot, beat: BeatInput): {
       after.visible = true;
       after.expression = "suspicious";
       break;
+    case "explode":
+      after.visible = false;
+      after.expression = "worried";
+      break;
+    case "die":
+      after.visible = false;
+      after.expression = "worried";
+      break;
     default:
       break;
   }
 
   let nextProps = scene.props.map((prop) => ({ ...prop }));
-  if (["enter", "walk", "run", "hide", "exit", "ride", "fly", "fall"].includes(normalizedBeat.action)) {
+  if (["enter", "walk", "move", "run", "hide", "exit", "ride", "fly", "fall"].includes(normalizedBeat.action)) {
     nextProps = nextProps.map((prop) => prop.heldBy === actor.id ? { ...prop, zone: after.zone } : prop);
   }
-  if (normalizedBeat.action === "hold" && normalizedBeat.targetId) {
+  if ((normalizedBeat.action === "hold" || normalizedBeat.action === "grab") && normalizedBeat.targetId) {
     nextProps = nextProps.map((prop) => prop.id === normalizedBeat.targetId ? { ...prop, heldBy: actor.id, zone: after.zone } : prop);
   }
   if (normalizedBeat.action === "drop" && normalizedBeat.targetId) {

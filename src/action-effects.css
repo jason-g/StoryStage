@@ -1,0 +1,12 @@
+.actor.active.action-jump { animation: puppet-jump .55s ease-in-out infinite alternate; }
+.actor.active.action-explode { animation: puppet-explode .35s ease-in-out infinite alternate; }
+.actor.active.action-die { animation: puppet-die 1s ease-in forwards; }
+
+.effect-explode,
+.effect-die { right: 18%; bottom: 20%; animation: impact .55s ease-in-out infinite alternate; }
+.effect-explode { color: #ffcf53; font-size: 86px; }
+.effect-die { color: #f2eadc; font-size: 58px; }
+
+@keyframes puppet-jump { to { transform: translateY(-45px) rotate(5deg); } }
+@keyframes puppet-explode { to { transform: scale(1.35) rotate(12deg); filter: brightness(1.8); } }
+@keyframes puppet-die { to { transform: translateY(55px) rotate(72deg); opacity: .15; } }

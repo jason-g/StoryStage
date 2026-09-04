@@ -30,7 +30,7 @@ declare global {
 }
 
 const zoneSchema = { type: "string", enum: ["offstage_left", "left", "center", "right", "offstage_right", "lamp", "crate", "castle", "hillside", "horse", "dragon_roost", "top_right", "ground_right"] };
-const actionSchema = { type: "string", enum: ["enter", "walk", "run", "point", "talk", "laugh", "gasp", "hide", "exit", "ride", "hold", "drop", "shoot", "fly", "fall", "attack"] };
+const actionSchema = { type: "string", enum: ["enter", "walk", "move", "run", "point", "talk", "laugh", "gasp", "hide", "exit", "ride", "jump", "hold", "grab", "drop", "shoot", "fly", "fall", "attack", "explode", "die"] };
 const expressionSchema = { type: "string", enum: ["neutral", "happy", "surprised", "suspicious", "amused", "worried"] };
 const object = (properties: Record<string, unknown>, required: string[] = []) => ({ type: "object", properties, required, additionalProperties: false });
 
@@ -55,7 +55,7 @@ export function registerStoryStageTools(api: StoryStageToolApi): boolean {
     { name: "create_character", description: "Add a supported character preset to the shared stage.", inputSchema: object({ preset: { type: "string", enum: ["fox_detective", "robot", "knight", "dragon"] }, name: { type: "string", minLength: 1, maxLength: 32 }, palette: { type: "string", enum: ["amber", "teal", "violet", "coral", "silver", "crimson"] } }, ["preset", "name"]), execute: wrap(api.createCharacter) },
     { name: "create_scene", description: "Reset StoryStage to the neon alley mystery or hillside knight quest.", inputSchema: object({ sceneId: { type: "string", enum: ["neon_alley", "hillside_quest"] } }, ["sceneId"]), execute: wrap(api.createScene) },
     { name: "place_actor", description: "Place an existing actor in a named StoryStage zone.", inputSchema: object({ actorId: { type: "string" }, zone: zoneSchema }, ["actorId", "zone"]), execute: wrap(api.placeActor) },
-    { name: "direct_action", description: "Queue one atomic stage action. Inspect the scene first. Use action hold with an object targetId for hold, carry, pick up, take, or grab; the object attaches to the actor and follows later movement until dropped.", inputSchema: object({ actorId: { type: "string" }, action: actionSchema, zone: zoneSchema, targetId: { type: "string", enum: ["lamp", "crate", "clue", "fenn", "nix", "castle", "horse", "sword", "bow", "arrow", "arthur", "ember"] }, dialogue: { type: "string", maxLength: 140 } }, ["actorId", "action"]), execute: wrap(api.directAction) },
+    { name: "direct_action", description: "Queue one atomic stage action. Inspect the scene first. Use hold or grab with an object targetId to attach the object to an actor until it is dropped.", inputSchema: object({ actorId: { type: "string" }, action: actionSchema, zone: zoneSchema, targetId: { type: "string", enum: ["lamp", "crate", "clue", "fenn", "nix", "castle", "horse", "sword", "bow", "arrow", "arthur", "ember"] }, dialogue: { type: "string", maxLength: 140 } }, ["actorId", "action"]), execute: wrap(api.directAction) },
     { name: "set_expression", description: "Set a visible expression for an actor.", inputSchema: object({ actorId: { type: "string" }, expression: expressionSchema }, ["actorId", "expression"]), execute: wrap(api.setExpression) },
     { name: "play_scene", description: "Play queued StoryStage directions in sequence.", inputSchema: object({ beatIds: { type: "array", items: { type: "string" } } }), execute: wrap(api.playScene) },
   ];

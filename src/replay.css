@@ -1,0 +1,31 @@
+.queue-item {
+  grid-template-columns: 25px minmax(45px, .75fr) 15px minmax(70px, 1fr) 26px;
+}
+
+.queue-item.complete {
+  opacity: .72;
+}
+
+.replay-beat {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid #4b486c;
+  border-radius: 6px;
+  background: #292742;
+  color: #93edff;
+  cursor: pointer;
+  font-size: .82rem;
+}
+
+.replay-beat:hover {
+  border-color: #81e9ff;
+  background: #353252;
+}
+
+.replay-beat:disabled {
+  cursor: not-allowed;
+  opacity: .35;
+}

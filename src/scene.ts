@@ -35,15 +35,15 @@ export const createInitialScene = (): SceneState => ({
 export const createHillsideQuestScene = (): SceneState => ({
   sceneId: "hillside_quest",
   actors: [
-    { id: "arthur", preset: "knight", name: "Sir Arthur", palette: "silver", zone: "horse", expression: "suspicious", visible: true },
-    { id: "ember", preset: "dragon", name: "Ember", palette: "crimson", zone: "dragon_roost", expression: "amused", visible: true },
+    { id: "arthur", preset: "knight", name: "Sir Arthur", palette: "silver", zone: "castle", expression: "suspicious", visible: true },
+    { id: "ember", preset: "dragon", name: "Ember", palette: "crimson", zone: "top_right", expression: "amused", visible: true },
   ],
   props: [
     { id: "castle", zone: "castle", visible: true, kind: "scenery" },
     { id: "horse", zone: "horse", visible: true, kind: "entity" },
-    { id: "sword", zone: "hillside", visible: true, kind: "object" },
-    { id: "bow", zone: "hillside", visible: true, kind: "object" },
-    { id: "arrow", zone: "hillside", visible: true, kind: "object" },
+    { id: "sword", zone: "castle", visible: true, heldBy: "arthur", kind: "object" },
+    { id: "bow", zone: "castle", visible: true, heldBy: "arthur", kind: "object" },
+    { id: "arrow", zone: "castle", visible: true, kind: "object" },
   ],
   queue: [],
   isPlaying: false,

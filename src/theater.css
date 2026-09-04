@@ -1,0 +1,43 @@
+.stage {
+  background-color: #170d13;
+  background-image: linear-gradient(#09071366, #24102d73), url("./assets/theater-curtain-stage.webp");
+  background-position: center;
+  background-size: cover;
+}
+
+.hillside-stage {
+  background-color: #25140f;
+  background-image: url("./assets/theater-curtain-stage.webp");
+  background-position: center;
+  background-size: cover;
+}
+
+.hillside-stage::before {
+  background: radial-gradient(ellipse at 50% 62%, #f8b64d28, transparent 48%), linear-gradient(#160b1230, #10070820);
+  opacity: 1;
+  pointer-events: none;
+}
+
+.hillside-stage .floor {
+  height: 18%;
+  border-color: #d1893970;
+  background: linear-gradient(transparent, #2a130d42);
+}
+
+.hillside-stage .hill-back { background: #5d744b; opacity: .16; }
+.hillside-stage .hill-front { background: #4e633e; opacity: .13; }
+
+.actor-slot::before,
+.actor-slot::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  bottom: 106px;
+  width: 1px;
+  height: 330px;
+  background: linear-gradient(#d9bd7d99, #f8e3adcc);
+  box-shadow: 0 0 2px #2b160e;
+}
+
+.actor-slot::before { left: 25px; transform: rotate(-1.5deg); }
+.actor-slot::after { right: 24px; transform: rotate(1.5deg); }

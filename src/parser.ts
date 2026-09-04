@@ -72,9 +72,9 @@ type ObjectMatch = {
 };
 
 const DEFAULT_ACTOR_ALIASES: Record<string, string[]> = {
-  fenn: ["detective fenn", "fenn", "fox detective", "the fox", "fox"],
-  nix: ["nix", "the robot", "robot", "bot"],
-  arthur: ["sir arthur", "arthur", "sir aurthor", "aurthor", "the knight", "knight", "brave knight", "brave night", "sir aria", "aria"],
+  fenn: ["detective fenn", "detective fen", "detective finn", "detective fan", "fenn", "fen", "finn", "fox detective", "the fox", "fox"],
+  nix: ["nix", "nicks", "nick's", "the robot", "robot", "bot"],
+  arthur: ["sir arthur", "sir author", "sir arther", "arthur", "author", "arther", "sir aurthor", "aurthor", "the knight", "knight", "brave knight", "brave night", "sir aria", "aria"],
   ember: ["ember", "the dragon", "dragon"],
 };
 
@@ -107,7 +107,8 @@ const ZONE_ALIASES: Array<{ zone: StageZone; aliases: string[] }> = [
 
 const ACTION_RULES: Array<{ action: StageAction; patterns: RegExp[] }> = [
   { action: "enter", patterns: [/\benter(?:s|ed|ing)?\b/, /\bcome(?:s| in| into)?\b/, /\barriv(?:e|es|ed|ing)\b/, /\bstep(?:s|ped|ping)?\s+on\b/] },
-  { action: "walk", patterns: [/\bwalk(?:s|ed|ing)?\b/, /\bmove(?:s|d|ing)?\b/, /\bgo(?:es|ing)?\b/] },
+  { action: "walk", patterns: [/\bwalk(?:s|ed|ing)?\b/, /\bgo(?:es|ing)?\b/] },
+  { action: "move", patterns: [/\b(?:move|moves|moved|moving)\b/] },
   { action: "run", patterns: [/\brun(?:s|ning|ned)?\b/, /\bsprint(?:s|ed|ing)?\b/] },
   { action: "point", patterns: [/\bpoint(?:s|ed|ing)?\b/, /\bgesture(?:s|d|ing)?\s+at\b/] },
   { action: "talk", patterns: [/\bsay(?:s|ing|id)?\b/, /\btalk(?:s|ed|ing)?\b/, /\bspeak(?:s|ing|ed)?\b/, /\bwhisper(?:s|ed|ing)?\b/, /\banswer(?:s|ed|ing)?\b/] },
@@ -115,13 +116,17 @@ const ACTION_RULES: Array<{ action: StageAction; patterns: RegExp[] }> = [
   { action: "gasp", patterns: [/\bgasp(?:s|ed|ing)?\b/, /\bpant(?:s|ed|ing)?\b/] },
   { action: "hide", patterns: [/\bhide(?:s|d|ing)?\b/, /\bsneak(?:s|ed|ing)?\b/, /\bcrouch(?:es|ed|ing)?\b/] },
   { action: "exit", patterns: [/\bexit(?:s|ed|ing)?\b/, /\bleav(?:e|es|ing|t)?\b/, /\bdepart(?:s|ed|ing)?\b/] },
-  { action: "ride", patterns: [/\bride(?:s|r|ing)?\b/, /\bmount(?:s|ed|ing)?\b/] },
-  { action: "hold", patterns: [/\bhold(?:s|ing)?\b/, /\bheld\b/, /\bgrip(?:s|ped|ping)?\b/, /\bpick(?:s|ed|ing)?\s+up\b/, /\bcarry(?:ing)?\b/, /\bcarries\b/, /\bcarried\b/, /\bgrab(?:s|bed|bing)?\b/, /\btake(?:s|n)?\b/, /\btook\b/] },
+  { action: "ride", patterns: [/\b(?:ride|rides|rider|riders|riding|rode|ridden)\b/, /\bmount(?:s|ed|ing)?\b/] },
+  { action: "jump", patterns: [/\bjump(?:s|ed|ing)?\b/, /\bleap(?:s|ed|ing|t)?\b/] },
+  { action: "hold", patterns: [/\bhold(?:s|ing)?\b/, /\bheld\b/, /\bgrip(?:s|ped|ping)?\b/, /\bpick(?:s|ed|ing)?\s+up\b/, /\bcarry(?:ing)?\b/, /\bcarries\b/, /\bcarried\b/, /\btake(?:s|n)?\b/, /\btook\b/] },
+  { action: "grab", patterns: [/\bgrab(?:s|bed|bing)?\b/, /\bsnatch(?:es|ed|ing)?\b/] },
   { action: "drop", patterns: [/\bdrop(?:s|ped|ping)?\b/, /\bdiscard(?:s|ed|ing)?\b/] },
   { action: "shoot", patterns: [/\bshoot(?:s|ing)?\b/, /\bfire(?:s|d|ing)?\b/] },
   { action: "fly", patterns: [/\bfly(?:s|ing)?\b/, /\bsoar(?:s|ed|ing)?\b/] },
   { action: "fall", patterns: [/\bfall(?:s|ing|en)?\b/, /\bcrash(?:es|ed|ing)?\b/] },
   { action: "attack", patterns: [/\battack(?:s|ed|ing)?\b/, /\bstrike(?:s|struck|ing)?\b/, /\bslash(?:es|ed|ing)?\b/] },
+  { action: "explode", patterns: [/\b(?:explode|explodes|exploded|exploding)\b/, /\b(?:blow|blows|blew|blown|blowing)\s+up\b/] },
+  { action: "die", patterns: [/\bdie(?:s|d)?\b/, /\bdying\b/, /\bdead\b/, /\bperish(?:es|ed|ing)?\b/] },
 ];
 
 const QUOTE_PATTERN = /["“”']([^"“”']+)["“”']/;
@@ -303,10 +308,12 @@ function resolveActor(clause: string, options: DirectionParseOptions): ActorMatc
   const matches: ActorMatch[] = [];
 
   for (const actor of actorAliases) {
+    let foundExact = false;
     for (const alias of actor.aliases) {
       const pattern = new RegExp(`\\b${escapeRegExp(alias)}\\b`, "gi");
       let match: RegExpExecArray | null;
       while ((match = pattern.exec(clause)) !== null) {
+        foundExact = true;
         matches.push({
           actorId: actor.actorId,
           actorLabel: actor.actorLabel,
@@ -314,6 +321,10 @@ function resolveActor(clause: string, options: DirectionParseOptions): ActorMatc
           aliasLength: alias.length,
         });
       }
+    }
+    if (!foundExact) {
+      const fuzzy = fuzzyAliasIndex(clause, actor.aliases);
+      if (fuzzy) matches.push({ actorId: actor.actorId, actorLabel: actor.actorLabel, ...fuzzy });
     }
   }
 
@@ -342,10 +353,12 @@ function resolveObjectMentions(clause: string, options: DirectionParseOptions): 
 
   const propAliases = buildPropAliases(options);
   for (const prop of propAliases) {
+    let foundExact = false;
     for (const alias of prop.aliases) {
       const pattern = new RegExp(`\\b${escapeRegExp(alias)}\\b`, "gi");
       let match: RegExpExecArray | null;
       while ((match = pattern.exec(clause)) !== null) {
+        foundExact = true;
         matches.push({
           id: prop.propId,
           kind: "prop",
@@ -355,14 +368,20 @@ function resolveObjectMentions(clause: string, options: DirectionParseOptions): 
         });
       }
     }
+    if (!foundExact) {
+      const fuzzy = fuzzyAliasIndex(clause, prop.aliases);
+      if (fuzzy) matches.push({ id: prop.propId, kind: "prop", zone: prop.zone, ...fuzzy });
+    }
   }
 
   const actorAliases = buildActorAliases(options);
   for (const actor of actorAliases) {
+    let foundExact = false;
     for (const alias of actor.aliases) {
       const pattern = new RegExp(`\\b${escapeRegExp(alias)}\\b`, "gi");
       let match: RegExpExecArray | null;
       while ((match = pattern.exec(clause)) !== null) {
+        foundExact = true;
         matches.push({
           id: actor.actorId,
           kind: "actor",
@@ -371,6 +390,10 @@ function resolveObjectMentions(clause: string, options: DirectionParseOptions): 
         });
       }
     }
+    if (!foundExact) {
+      const fuzzy = fuzzyAliasIndex(clause, actor.aliases);
+      if (fuzzy) matches.push({ id: actor.actorId, kind: "actor", ...fuzzy });
+    }
   }
 
   return matches.sort((a, b) => a.index - b.index || b.aliasLength - a.aliasLength);
@@ -378,6 +401,45 @@ function resolveObjectMentions(clause: string, options: DirectionParseOptions): 
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function editDistance(left: string, right: string): number {
+  const previous = Array.from({ length: right.length + 1 }, (_, index) => index);
+  for (let leftIndex = 1; leftIndex <= left.length; leftIndex += 1) {
+    let diagonal = previous[0];
+    previous[0] = leftIndex;
+    for (let rightIndex = 1; rightIndex <= right.length; rightIndex += 1) {
+      const above = previous[rightIndex];
+      previous[rightIndex] = Math.min(
+        previous[rightIndex] + 1,
+        previous[rightIndex - 1] + 1,
+        diagonal + (left[leftIndex - 1] === right[rightIndex - 1] ? 0 : 1),
+      );
+      diagonal = above;
+    }
+  }
+  return previous[right.length];
+}
+
+function fuzzyAliasIndex(clause: string, aliases: string[]): { index: number; aliasLength: number } | null {
+  const words = [...clause.matchAll(/[a-z0-9]+/gi)].map((match) => ({ value: match[0].toLowerCase(), index: match.index ?? 0 }));
+  let best: { index: number; aliasLength: number; score: number } | null = null;
+
+  for (const alias of aliases) {
+    const aliasWords = alias.match(/[a-z0-9]+/gi)?.map((word) => word.toLowerCase()) ?? [];
+    if (!aliasWords.length) continue;
+    for (let index = 0; index <= words.length - aliasWords.length; index += 1) {
+      const phrase = words.slice(index, index + aliasWords.length).map((word) => word.value).join(" ");
+      const normalizedDistance = editDistance(phrase, aliasWords.join(" ")) / Math.max(phrase.length, alias.length);
+      // Multi-word character names carry enough context for a slightly wider
+      // tolerance; single-word matches stay strict to avoid guessing ordinary prose.
+      const threshold = aliasWords.length > 1 ? 0.24 : alias.length >= 5 ? 0.2 : 0.01;
+      if (normalizedDistance <= threshold && (!best || normalizedDistance < best.score)) {
+        best = { index: words[index].index, aliasLength: phrase.length, score: normalizedDistance };
+      }
+    }
+  }
+  return best;
 }
 
 function extractDialogue(clause: string): string | undefined {
@@ -398,7 +460,7 @@ function extractAction(clause: string): StageAction | null {
   return findAction(clause);
 }
 
-function extractTarget(clause: string, action: StageAction | null, options: DirectionParseOptions): { targetId?: string; zone?: StageZone } {
+function extractTarget(clause: string, action: StageAction | null, options: DirectionParseOptions, actorId?: string): { targetId?: string; zone?: StageZone } {
   const matches = resolveObjectMentions(clause, options);
   const objectCandidates = matches.filter((match) => match.kind === "prop" || match.kind === "actor" || match.kind === "zone");
   const targetWords = [...clause.matchAll(PREPOSITION_PATTERN)].map((match) => ({
@@ -419,12 +481,12 @@ function extractTarget(clause: string, action: StageAction | null, options: Dire
     return fromPreposition;
   };
 
-  if (action === "point" || action === "talk" || action === "hold" || action === "drop" || action === "shoot" || action === "attack") {
+  if (action === "point" || action === "talk" || action === "hold" || action === "grab" || action === "drop" || action === "shoot" || action === "attack") {
     if (action === "shoot" || action === "attack") {
-      const actorTarget = objectCandidates.find((item) => item.kind === "actor" && item.index > 0);
+      const actorTarget = objectCandidates.find((item) => item.kind === "actor" && item.id !== actorId);
       if (actorTarget) return { targetId: actorTarget.id };
     }
-    if (action === "hold" || action === "drop") {
+    if (action === "hold" || action === "grab" || action === "drop") {
       const propTarget = findBest((item) => item.kind === "prop");
       return propTarget ? { targetId: propTarget.id } : {};
     }
@@ -432,7 +494,7 @@ function extractTarget(clause: string, action: StageAction | null, options: Dire
     return target ? { targetId: target.id } : {};
   }
 
-  if (action === "enter" || action === "walk" || action === "run" || action === "hide" || action === "exit" || action === "ride" || action === "fly" || action === "fall") {
+  if (action === "enter" || action === "walk" || action === "move" || action === "run" || action === "hide" || action === "exit" || action === "ride" || action === "fly" || action === "fall") {
     const directionalDestination = clause.match(/\b(?:to|toward|towards)\s+(?:the\s+)?(top right|ground right|dragon roost|offstage left|offstage right|castle|hillside|horse|left|center|right)\b/i)?.[1].toLowerCase();
     if (directionalDestination) {
       const resolvedZone = ZONE_ALIASES.find((entry) => entry.aliases.includes(directionalDestination))?.zone;
@@ -520,7 +582,7 @@ export function parseDirection(input: string, options: DirectionParseOptions = {
           `Could not find a supported action in clause "${clause}".`,
           clauseIndex,
           clause,
-          "Use one of enter, walk, run, point, talk, laugh, gasp, hide, exit, ride, hold, drop, shoot, fly, fall, or attack.",
+          `Use one of ${STAGE_ACTIONS.join(", ")}.`,
         ),
       );
       return;
@@ -540,7 +602,7 @@ export function parseDirection(input: string, options: DirectionParseOptions = {
       return;
     }
 
-    const target = extractTarget(clause, action, options);
+    const target = extractTarget(clause, action, options, currentActorId);
     const beatAction = action ?? (dialogue ? "talk" : null);
 
     if (!beatAction) {
@@ -576,7 +638,7 @@ export function parseDirection(input: string, options: DirectionParseOptions = {
       beat.dialogue = dialogue;
     }
 
-    if (beat.action === "walk" || beat.action === "run" || beat.action === "enter" || beat.action === "hide" || beat.action === "exit" || beat.action === "ride" || beat.action === "fly" || beat.action === "fall") {
+    if (beat.action === "walk" || beat.action === "move" || beat.action === "run" || beat.action === "enter" || beat.action === "hide" || beat.action === "exit" || beat.action === "ride" || beat.action === "fly" || beat.action === "fall") {
       if (!beat.zone && !beat.targetId) {
         warnings.push(
           buildWarning(
@@ -604,7 +666,7 @@ export function parseDirection(input: string, options: DirectionParseOptions = {
       );
     }
 
-    if (beat.action === "hold" || beat.action === "drop") {
+    if (beat.action === "hold" || beat.action === "grab" || beat.action === "drop") {
       const propTargets = Array.from(new Set(
         resolveObjectMentions(clause, options)
           .filter((match) => match.kind === "prop")
