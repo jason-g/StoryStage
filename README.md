@@ -105,7 +105,7 @@ Open the local URL printed by Vite. Build a production bundle with `npm run buil
 
 ### Authenticated contest preview
 
-StoryStage is configured for Cloudflare Workers Static Assets. The Worker in `worker.js` protects every production route with HTTP Basic authentication, while local Vite development remains unchanged.
+StoryStage is configured for Cloudflare Workers Static Assets. The Worker in `worker.js` protects every production route with a browser-compatible sign-in page and a secure, one-day session cookie, while local Vite development remains unchanged. This avoids native HTTP Basic Auth dialogs, which are not supported consistently by embedded browsers.
 
 1. In **Workers & Pages**, create an application, continue with GitHub, and select this repository.
 2. Set the build command to `npm run build` and keep the deploy command as `npx wrangler deploy`.
